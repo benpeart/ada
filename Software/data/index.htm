@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+	<script>
+	var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']);
+	connection.binaryType = 'arraybuffer';
+	connection.onopen = function () {  
+		<!-- connection.send('Connect ' + new Date());  -->
+	}; 
+	connection.onerror = function (error) {    
+		console.log('WebSocket Error ', error);
+	};
+	connection.onmessage = function (e) {  
+	  if (typeof(e.data)=='string') { // Text frame
+  		console.log('Server: ', e.data);
+  		if (e.data[0]=='c') {
+  		  cmd = e.data.substr(0,3);
+  		  val = e.data.substr(3);
+  		} else if (e.data[0]=='w') {
+  		  var str = e.data.substr(1);
+  		  parseWifiCommand(str);
+  		} else {
+  		  cmd = e.data.substr(0,1);
+  		  val = e.data.substr(1);
+  		}
+  		document.getElementById(cmd).value = parseFloat(val);
+	  } else { // Binary
+	  }
+	};
+	function sendData(e) {
+	 // var id = event.target.id;
+	 // var val = parseFloat(document.getElementById(id).value).toString(10);
+	  var val = e.value;
+	  var val2 = e.id + val + 'x';
+	  console.log(val2);
+	  connection.send(val2);
+	}
+	function sendCommand(cmd, val) {
+    var text = cmd + val + 'x';
+    console.log(text);
+    connection.send(text);
+  }
+  function sendWifiDetails() {
+    /*
+    Check if fields are non-empty. Key should be longer than 8 characters.
+    */
+    var ssid = document.getElementById('WifiSSID').value;
+    var key = document.getElementById('WifiKey').value;
+    sendCommand('ws', ssid);
+    sendCommand('wk', key);
+  }
+  function parseWifiCommand(cmdStr) {
+    var cmd = cmdStr.substr(0,1);
+    var str = cmdStr.substr(1);
+    
+    switch (cmd) {
+      case 'l': // Received list of WiFi networks
+        var strSplit = str.split(",");
+        
+        var select = document.getElementById("SSIDlist");
+        var length = select.options.length;
+    
+        // Remove old options
+        for (i = 0; i < length; i++) {
+          select.options[i] = null;
+        }
+        // Add newly received list
+        console.log(strSplit.lenth);
+        for (i=0; i<strSplit.length; i++) {
+          var c = document.createElement("option");
+          c.text = strSplit[i];
+          select.options.add(c);
+        }
+        break;
+      case 's':
+        var e = document.getElementById('WifiSSID');
+        e.value = str;
+        break;
+      case 'm':
+        var e = document.getElementsByName('wm');
+        e[parseInt(str)].checked = true;
+        break;
+    }
+  }
+  function selectWifiFromList(str) {
+    e = document.getElementById("WifiSSID");
+    e.value = str;
+  }
+	</script>
+	<title>Balancing robot interface</title>
+</head>
+
+<body>
+	PID tuning:<br />
+	<br>
+	<form>
+	  <table cellpadding="10"><tr><td>
+		Angle:<br />
+		P: <input id="c1p" type="range" min="0.1" max="3" step="0.01" oninput=sendData(this);><br />
+		I: <input id="c1i" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><br />
+		D: <input id="c1d" type="range" min="0" max="0.3" step="0.001" oninput=sendData(this);><br />
+		N: <input id="c1n" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		Max: <input id="c1m" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		Min: <input id="c1o" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		<input id="c1t" type="radio" name="cType" value="0" onchange=sendData(this);>P
+		<input id="c1t" type="radio" name="cType" value="1" onchange=sendData(this);>PI
+		<input id="c1t" type="radio" name="cType" value="2" onchange=sendData(this);>PD
+		<input id="c1t" type="radio" name="cType" value="3" onchange=sendData(this);>PID<br />
+		</td><td>
+		Pos:<br />
+		P: <input id="c2p" type="range" min="0.1" max="10" step="0.1" oninput=sendData(this);><br />
+		I: <input id="c2i" type="range" min="0" max="5" step="0.01" oninput=sendData(this);><br />
+		D: <input id="c2d" type="range" min="0" max="3" step="0.01" oninput=sendData(this);><br />
+		N: <input id="c2n" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		Max: <input id="c2m" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		Min: <input id="c2o" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		<input id="c2t" type="radio" name="cType" value="0" onchange=sendData(this);>P
+		<input id="c2t" type="radio" name="cType" value="1" onchange=sendData(this);>PI
+		<input id="c2t" type="radio" name="cType" value="2" onchange=sendData(this);>PD
+		<input id="c2t" type="radio" name="cType" value="3" onchange=sendData(this);>PID<br />
+		</td><td>
+		Speed:<br />
+		P: <input id="c3p" type="range" min="0.1" max="10" step="0.1" oninput=sendData(this);><br />
+		I: <input id="c3i" type="range" min="0" max="5" step="0.01" oninput=sendData(this);><br />
+		D: <input id="c3d" type="range" min="0" max="0.3" step="0.001" oninput=sendData(this);><br />
+		N: <input id="c3n" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		Max: <input id="c3m" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		Min: <input id="c3o" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><br />
+		<input id="c3t" type="radio" name="cType" value="0" onchange=sendData(this);>P
+		<input id="c3t" type="radio" name="cType" value="1" onchange=sendData(this);>PI
+		<input id="c3t" type="radio" name="cType" value="2" onchange=sendData(this);>PD
+		<input id="c3t" type="radio" name="cType" value="3" onchange=sendData(this);>PID<br />
+		</td></tr></table>
+		Stepper:<br />
+		Current: <input id="v" type="range" min="0" max="255" step="1" oninput=sendData(this);><br />
+		Max speed: <input id="l" type="range" min="100" max="6000" step="10" oninput=sendData(this);><br /><br />
+		Receiver filtering:<br />
+		Speed: <input id="h" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><br />
+		Steer: <input id="i" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><br /><br />
+		Gyro gain: <input id="j" type="range" min="0.5" max="1.5" step="0.01" oninput=sendData(this);><br />
+		Gyro filter constant: <input id="n" type="range" min="0.9" max="1" step="0.001" oninput=sendData(this);><br />
+		Gyro calibration 
+		<button type="button" onclick="sendCommand('k', 1)">Gyroscope offset</button>
+		<button type="button" onclick="sendCommand('k', 2)">Angle offset</button>
+		<br /><br />
+		Wifi configuration<br />
+		<input id="wm" type="radio" name="wm" value="0" onchange=sendData(this);>AP
+		<input id="wm" type="radio" name="wm" value="1" onchange=sendData(this);>SSID<br />
+		SSID<br /><input type="text" id="WifiSSID" value="abc" style="width:200px"><br />
+		Key<br /><input type="text" id="WifiKey" style="width:200px"><br />
+		<select id="SSIDlist" onchange="selectWifiFromList(this.value)" style="width:200px"></select>
+		<button type="button" onclick="sendCommand('wl',1)">Scan</button><br />
+		<button type="button" onclick="sendWifiDetails()">Set</button>
+		<button type="button" onclick="sendCommand('wr',1)">Reboot</button>
+	</form>
+</body>
+</html>

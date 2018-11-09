@@ -1,0 +1,145 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+
+</head>
+
+<body>
+<canvas id="chartContainer" height=300"px" width=800p" style="border:1px solid #d3d3d3;"></canvas><br />
+<button name="plotStart" onclick="plotStartStop(1)" style="width:80px">Start</button>
+<button name="plotSTop" onclick="plotStartStop(0)" style="width:80px">Stop</button><br /><br />
+
+Sample rate [Hz]:<br />
+<input id="plotRate" type="radio" name="sampleRate" value="8">25
+<input id="plotRate" type="radio" name="sampleRate" value="4" checked>50
+<input id="plotRate" type="radio" name="sampleRate" value="2">100
+<input id="plotRate" type="radio" name="sampleRate" value="1">200<br /><br />
+
+Signals to plot<br />
+<input type="checkbox" name="plotOption" id="accAngle"      onchange=plotOption(this);>accelerometer angle<br />
+<input type="checkbox" name="plotOption" id="filterAngle"   onchange=plotOption(this);>accelerometer + gyro angle<br />
+<input type="checkbox" name="plotOption" id="PID1setpoint"  onchange=plotOption(this); checked>PID angle setpoint<br />
+<input type="checkbox" name="plotOption" id="PID1input"     onchange=plotOption(this); checked>PID angle input<br />
+<input type="checkbox" name="plotOption" id="PID1output"    onchange=plotOption(this);>PID angle output<br />
+<input type="checkbox" name="plotOption" id="PID2setpoint"  onchange=plotOption(this);>PID position setpoint<br />
+<input type="checkbox" name="plotOption" id="PID2input"     onchange=plotOption(this);>PID position input<br />
+<input type="checkbox" name="plotOption" id="PID2output"    onchange=plotOption(this);>PID position output<br />
+<input type="checkbox" name="plotOption" id="PID3setpoint"  onchange=plotOption(this);>PID speed setpoint<br />
+<input type="checkbox" name="plotOption" id="PID3input"     onchange=plotOption(this);>PID speed input<br />
+<input type="checkbox" name="plotOption" id="PID3output"    onchange=plotOption(this);>PID speed output<br />
+<input type="checkbox" name="plotOption" id="motLeftSpeed"  onchange=plotOption(this);>Left motor speed<br />
+<input type="checkbox" name="plotOption" id="motRightSpeed" onchange=plotOption(this);>Right motor speed<br />
+</body>
+
+<script>
+  
+var canvas = document.getElementById('chartContainer');
+var ctx = canvas.getContext('2d');
+
+
+var nSample = 500;
+var nSignal = 11;
+var yLim = [-100, 100];
+var col = ["blue","red","green"];
+
+var plotEnabled = new Array();
+
+// Init data array
+var data = new Array(nSignal);
+for (var i=0; i<nSignal; i++) data[i] = new Array(nSample);
+for (var i=0; i<nSignal; i++) data[i].fill(0,0,nSample);
+
+var updateChart = function() {
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	for (var i=0; i<plotEnabled.length; i++) {
+	  var signalNo = plotEnabled[i];
+  <!--for (var i=0; i<nSignal; i++) {-->
+    ctx.beginPath();
+    for (var j=0; j<nSample; j++) {
+      var x = j * canvas.clientWidth/nSample;
+      var y = canvas.clientHeight*(-data[signalNo][j]/(yLim[1]-yLim[0]) + 0.5);
+      // var y = data[i];
+      if (j==0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    ctx.stroke();
+    ctx.strokeStyle = col[i];
+  }
+}
+
+
+
+console.time('updateChart');
+updateChart();
+console.timeEnd('updateChart');
+
+	var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']);
+	connection.binaryType = 'arraybuffer';
+	connection.onopen = function () {  
+		<!-- connection.send('Connect ' + new Date());  -->
+	}; 
+	connection.onerror = function (error) {    
+		console.log('WebSocket Error ', error);
+	};
+		connection.onmessage = function (e) {  
+	  if (typeof(e.data)=='string') { // Text frame
+	  } else { // Binary
+	    var d = e.data;
+	    var dv = new DataView(d);
+	    var text = '';
+	    for (var i=0; i<dv.byteLength; i++) {
+	       text += dv.getUint8(i) + ' ';
+	    }
+	    cmd = dv.getUint8(0);
+	    t = dv.getUint32(4,true)/1000000;
+	    for (var i=0; i<nSignal; i++) {
+	      var val = dv.getFloat32(8+i*4, true);
+	      data[i].push(val);
+	      data[i].shift();
+	      }
+      updateChart();
+	    <!--console.log(val);-->
+	    <!--console.log(text);-->
+	   // console.log(dv.getFloat32(0),false);
+	  }
+	};
+
+var plotStartStop = function (x) {
+  var radioButtons = document.getElementsByName("sampleRate");
+  var prescaler = 8;
+  for (i=0; i<radioButtons.length; i++) {
+    if (radioButtons[i].checked) break;
+    prescaler /= 2;
+  }
+  sendCommand('h', x);
+  sendCommand('i', prescaler);
+}
+
+var plotOption = function(e) {
+  var plotOptions = document.getElementsByName("plotOption");
+  var plotOptionLength = plotOptions.length;
+  
+  plotEnabled = [];
+  var plotCount = 0;
+  for (var i=0; i<plotOptionLength; i++) {
+    if (plotOptions[i].checked) {
+      plotEnabled[plotCount++] = i;
+      }
+  }
+  <!--console.log(plotEnabled.length);-->
+  <!--for (var i=0; i<plotEnabled.length; i++) {-->
+    <!--console.log(plotEnabled[i]);-->
+  <!--}-->
+}
+
+function sendCommand(cmd, val) {
+  var text = cmd + val + 'x';
+  <!--console.log(text);-->
+  connection.send(text);
+}
+
+</script>
+</html>
