@@ -1,0 +1,1 @@
+The .f3d files in this folder are created with Fusion 360. Feel free to modify them, for example if you use a different (size) battery.
