@@ -1,10 +1,72 @@
-KiCad design files for the BalancingRobot PCB. Used components (with some random links for examples):
+
+This folder contains KiCad (5.0.0) design files for the BalancingRobot PCB. 
+
+# Features
+* Supports both DRV8825 and A4988 based stepper drivers
+* Supported voltage: 8 - 24V (2-6S LiPo/Li-ion)
+* Digital current control of steppers (you'll need to desolder the potmeter and add a wire)
+* Dynamic microstep switching, allowing for insane speeds
+* Connections: 
+	- Digital RC receiver (I use IBus / FlySky protocol), J5 upper row
+	- Servo, J5 middle row. In case you want to add an arm for self righting :).
+	- Digital LED (Neopixel / WS2812B etc), J5, lower row
+	- All unused ESP32 pins are broken out (including I2C), for further use and development (J2)
+	- Power input (J3). Allows for both a screw clamp and direct wire soldering. I prefer the last, given the high power output of a LiPo in case something comes loose.
+* Wireless parameter tuning and data plotting. Makes tuning the controllers a lot easier
+* Websocket communication for real-time communication between ESP32 and browser
+* Web interface via access point / WiFi network. SSID and key can be set via web interface.
+
+![Top side](/PCB/pictures/pcb_v1-1_top.png)
+![Top side](/PCB/pictures/pcb_v1-1_bottom.png)
+
+# Assembly
+Soon, my dear.
+
+IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By default, the voltage regulator is set to a higher voltage, and if you don't adjust it, you'll fry some components. 
+
+
+# BOM
+Applicable for v1.1. v1.0 doesn't have R7.
+| Qty | Reference(s)       | Value                                    |
+|-----|--------------------|------------------------------------------|
+| 2   | A1, A2             | DRV8825 / A4988 stepper driver breakout  |
+| 2   | C1, C3             | 1u capacitor, 0805 SMD                   |
+| 2   | C2, C4             | 100u elco, 35V                               |
+| 1   | C5                 | 100n capacitor, not placed               |
+| 1   | F1                 | Polyfuse                                 |
+| 1   | J1                 | Female header, cut to size               |
+| 1   | J2                 | N/A, solder whatever you like here       |
+| 1   | J3                 | Screw terminal, or solder wires directly |
+| 2   | J4, J7             | Female header, cut to size               |
+| 1   | J5                 | Male header, cut to size                 |
+| 5   | R1, R2, R3, R4, R6 | 3k3 resistor, 0805 SMD                   |
+| 1   | R5                 | 100k resistor, 0805 SMD                  |
+| 1   | R7                 | 10k resistor, 0805 SMD                   |
+| 1   | U1                 | ESP32 devKit module, 30 pins             |
+| 1   | U2                 | MPU6050 breakout, 8 pins                 |
+| 1   | U3                 | Buck converter module                    |
+
+Some examples of the modules:
 * [ESP32 Devkit V1 module, 30 pins](https://www.aliexpress.com/item/ESP32-Development-Board-WiFi-Bluetooth-Ultra-Low-Power-Consumption-Dual-Core-ESP-32-ESP-32S/32802431728.html?spm=a2g0s.9042311.0.0.26604c4dM62q0I)
 * [DRV8825 stepper driver](https://www.aliexpress.com/item/Free-shipping-10pcs-lot-3D-Printer-StepStick-DRV8825-Stepper-Motor-Drive-Carrier-Reprap-4-layer-PCB/32292074706.html?spm=a2g0s.9042311.0.0.26604c4dM62q0I)
 * [MPU6050 IMU](http://www.aliexpress.com/item/GY-521-MPU-6050-MPU6050-Module-3-Axis-analog-gyro-sensors-3-Axis-Accelerometer-Module/32340949017.html?spm=a2g0s.9042311.0.0.26604c4dM62q0I)
 * [Buck converter](https://www.aliexpress.com/item/10PCS-Mini-3A-DC-DC-Converter-Step-Down-Module-Adjustable-3V-5V-16V-Power-for-RC/32639738406.html?spm=a2g0s.9042311.0.0.66ef4c4duolobi)
-* 2x 100uF 35V electrolytic capacitor
-* Some female headers to fit the modules
-* SMD resistors, 0805 size: 5x 3.3kOhm, 1x 100kOhm
-* SMD capacitors, 0805 size: 1x 1uF, 1x 10uF
-* A polyfuse. Rating depends on chosen battery voltage. Lower voltage means higher current (the steppers work as a buck regulator). I use a 1A polyfuse at 24V.
+
+# Issues
+For PCB version 1.0, the + and - signs of the RX/Servo/LED indicator are swapped. The pinout is correct though. To be clear, the order (from right to left) is -, +, and signal. This has been solved in v1.1.
+
+# Change history
+## v1.0 
+Initial version
+## v1.1
+* Increased track width of 5V and 24V traces
+* Added second via in 24V trace, or rather added trace to second via which wasn't there in v1.0
+* Swapped + and - symbols on silkscreen close RX header 
+* Added a 10k pull-up on the stepper driver enable. In v1.0, no pull-up is present, meaning the steppers are enabled if the ESP32 isn't running. No big deal, but somewhat neater to disable steppers if the ESP32 isn't running.
+
+# To do for this readme
+* Add picture of assembled board
+* Write assembly guide
+* Add J2 header pinout
+* Stepper current adjustment
+* Refer to next steps

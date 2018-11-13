@@ -99,7 +99,7 @@ float maxStepSpeed = 3000;
 PID pidAngle(cPD, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
 #define PID_POS_MAX 35
 PID pidPos(cPD, dT, PID_POS_MAX, -PID_POS_MAX);
-PID pidSpeed(cPI, dT, PID_POS_MAX, -PID_POS_MAX);
+PID pidSpeed(cP, dT, PID_POS_MAX, -PID_POS_MAX);
 
 uint8_t controlMode = 1; // 0 = only angle, 1 = angle+position, 2 = angle+speed
 
@@ -113,7 +113,7 @@ float accAngle = 0;
 float filterAngle = 0;
 float filterAngleOffset = 0;
 float angleOffset = 2.0;
-float gyroFilterConstant = 0.998;
+float gyroFilterConstant = 0.996;
 float gyroGain = 1.1;
 
 // -- Others
@@ -288,7 +288,7 @@ void setup() {
   // }
 
   dacWrite(motorCurrentPin, motorCurrent);
-  pidAngle.setParameters(0.7,0,0.067,15);
+  pidAngle.setParameters(0.65,0,0.075,15);
   pidAngle.setpoint = 0;
 
   pidPos.setParameters(1,0,1.2,20);
@@ -680,7 +680,7 @@ void readSensor() {
   // accAngle = atan2f((float) ax, (float) az) * 180.0/M_PI;
   // deltaGyroAngle = -((float)((gy - gyroOffset[1])) / GYRO_SENSITIVITY) * dT * gyroGain;
     accAngle = atan2f((float) ay, (float) az) * 180.0/M_PI;
-    deltaGyroAngle = ((float)((gx - gyroOffset[1])) / GYRO_SENSITIVITY) * dT * gyroGain;
+    deltaGyroAngle = ((float)((gx - gyroOffset[0])) / GYRO_SENSITIVITY) * dT * gyroGain;
 
   filterAngle = gyroFilterConstant * (filterAngle + deltaGyroAngle) + (1 - gyroFilterConstant) * (accAngle);
   filterAngleOffset = filterAngle - angleOffset;
