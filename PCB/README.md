@@ -27,11 +27,12 @@ IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By d
 
 # BOM
 Applicable for v1.1. v1.0 doesn't have R7.
+
 | Qty | Reference(s)       | Value                                    |
 |-----|--------------------|------------------------------------------|
 | 2   | A1, A2             | DRV8825 / A4988 stepper driver breakout  |
 | 2   | C1, C3             | 1u capacitor, 0805 SMD                   |
-| 2   | C2, C4             | 100u elco, 35V                               |
+| 2   | C2, C4             | 100u elco, 35V                           |
 | 1   | C5                 | 100n capacitor, not placed               |
 | 1   | F1                 | Polyfuse                                 |
 | 1   | J1                 | Female header, cut to size               |
