@@ -20,7 +20,13 @@ This folder contains KiCad (5.0.0) design files for the BalancingRobot PCB.
 ![Top side](/PCB/pictures/pcb_v1-1_bottom.png)
 
 # Assembly
-Soon, my dear.
+Assembly is quite straightforward. For those who like some instructions, here goes. For the ones that don't like to follow instructions: that's ok, but please read the last instruction about adjusting the buck converter voltage.
+
+1. Start with the SMD components on the bottom side. First, pre-tin one pad, then place the SMD component while reheating the first pad. Finally, solder the second pad. C5 is not mounted.
+2. Next, mount the voltage regulator module U3. Use some wires to connect the 4 pads to the PCB.
+3. Place the IMU (U2) with the angled male and female headers. Make sure that the IMU is rigidly mounted. If you don't, the IMU might for example vibrate during operation, causing unstable behaviour.
+4. Add all female headers (J1, J4, J7, and for the stepper driver and ESP32 modules). Optionally, place some headers on J5 and J2 if you like.
+5. Finally, place C2, C4 and F1.
 
 IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By default, the voltage regulator is set to a higher voltage, and if you don't adjust it, you'll fry some components. 
 
@@ -28,24 +34,23 @@ IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By d
 # BOM
 Applicable for v1.1. v1.0 doesn't have R7.
 
-| Qty | Reference(s)       | Value                                    |
-|-----|--------------------|------------------------------------------|
-| 2   | A1, A2             | DRV8825 / A4988 stepper driver breakout  |
-| 2   | C1, C3             | 1u capacitor, 0805 SMD                   |
-| 2   | C2, C4             | 100u elco, 35V                           |
-| 1   | C5                 | 100n capacitor, not placed               |
-| 1   | F1                 | Polyfuse                                 |
-| 1   | J1                 | Female header, cut to size               |
-| 1   | J2                 | N/A, solder whatever you like here       |
-| 1   | J3                 | Screw terminal, or solder wires directly |
-| 2   | J4, J7             | Female header, cut to size               |
-| 1   | J5                 | Male header, cut to size                 |
-| 5   | R1, R2, R3, R4, R6 | 3k3 resistor, 0805 SMD                   |
-| 1   | R5                 | 100k resistor, 0805 SMD                  |
-| 1   | R7                 | 10k resistor, 0805 SMD                   |
-| 1   | U1                 | ESP32 devKit module, 30 pins             |
-| 1   | U2                 | MPU6050 breakout, 8 pins                 |
-| 1   | U3                 | Buck converter module                    |
+| Qty | Reference(s)           | Value                                    |
+|-----|------------------------|------------------------------------------|
+| 2   | A1, A2                 | DRV8825 / A4988 stepper driver breakout  |
+| 2   | C1, C3                 | 1u capacitor, 0805 SMD                   |
+| 2   | C2, C4                 | 100u elco                                |
+| 1   | C5                     | 100n capacitor, not placed               |
+| 1   | F1                     | Polyfuse                                 |
+| 1   | J1                     | Female header, cut to size               |
+| 1   | J2                     | N/A, solder whatever you like here       |
+| 1   | J3                     | Screw terminal, or solder wires directly |
+| 2   | J4, J7                 | Female header, cut to size               |
+| 1   | J5                     | Male header, cut to size                 |
+| 6   | R1, R2, R3, R4, R6, R7 | 3k3 resistor, 0805 SMD                   |
+| 1   | R5                     | 100k resistor, 0805 SMD                  |
+| 1   | U1                     | ESP32 devKit module, 30 pins             |
+| 1   | U2                     | MPU6050 breakout, 8 pins                 |
+| 1   | U3                     | Buck converter module                    |
 
 Some examples of the modules:
 * [ESP32 Devkit V1 module, 30 pins](https://www.aliexpress.com/item/ESP32-Development-Board-WiFi-Bluetooth-Ultra-Low-Power-Consumption-Dual-Core-ESP-32-ESP-32S/32802431728.html?spm=a2g0s.9042311.0.0.26604c4dM62q0I)
@@ -62,12 +67,12 @@ Initial version
 ## v1.1
 * Increased track width of 5V and 24V traces
 * Added second via in 24V trace, or rather added trace to second via which wasn't there in v1.0
-* Swapped + and - symbols on silkscreen close RX header 
+* Swapped + and - symbols on silkscreen close to RX header 
 * Added a 10k pull-up on the stepper driver enable. In v1.0, no pull-up is present, meaning the steppers are enabled if the ESP32 isn't running. No big deal, but somewhat neater to disable steppers if the ESP32 isn't running.
 
 # To do for this readme
 * Add picture of assembled board
-* Write assembly guide
+* Add some pictures to the assembly section
 * Add J2 header pinout
 * Stepper current adjustment
 * Refer to next steps
