@@ -1,5 +1,7 @@
 /*
  * Simple interface to the Fly Sky IBus RC system.
+ * Obtained from https://gitlab.com/timwilkinson/FlySkyIBus
+ * Slightly modified for a bit more robustness
  */
 
 #include <Arduino.h>
