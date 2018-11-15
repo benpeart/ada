@@ -30,6 +30,10 @@ Assembly is quite straightforward. For those who like some instructions, here go
 
 IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By default, the voltage regulator is set to a higher voltage, and if you don't adjust it, you'll fry some components. 
 
+## Advanced
+You can de-solder de current adjustment potentiometer on the stepper driver breakout boards. Add a wire to the wiper terminal, and connect the (two) wires to J4. Current can then be adjusted via the web interface. Or, get creative, and implement some current saving functionality.
+
+For better performance, you can tie the decay mode pin of the DRV8825 to VCC, setting it in fast mode. The DRV8825 sometimes skips steps in slow/mixed decay mode. 
 
 # BOM
 Applicable for v1.1. v1.0 doesn't have R7.
