@@ -105,8 +105,14 @@ void PID::updateParameters()
 	_df2 = Td*N/(Td+N*_dT);
 }
 
+void PID::reset() {
+	_Iterm = 0;
+	_Dterm = 0;
+	_lastDterm = 0;
+	_lastInput = 0;
+}
 
-void PID::resetIntegrator()
+void PID::resetITerm()
 {
 	_Iterm = 0;
 }

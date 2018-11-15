@@ -56,6 +56,7 @@ void parseSerial();
 void parseCommand(char* data, uint8_t length);
 void calculateGyroOffset(uint8_t nSample);
 void readSensor();
+void initSensor(uint8_t n);
 void setMicroStep(uint8_t uStep);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
 
@@ -111,7 +112,6 @@ MPU6050 imu;
 int16_t gyroOffset[3];
 float accAngle = 0;
 float filterAngle = 0;
-float filterAngleOffset = 0;
 float angleOffset = 2.0;
 float gyroFilterConstant = 0.996;
 float gyroGain = 1.1;
@@ -201,12 +201,7 @@ void setup() {
   angleOffset = EEPROM.readFloat(EEPROM_ADR_ANGLE_OFFSET);
 
   // Perform initial gyro measurements
-  float gyroFilterConstantBackup = gyroFilterConstant;
-  gyroFilterConstant = 0.9;
-  for (uint8_t i=0; i<50; i++) {
-    readSensor();
-  }
-  gyroFilterConstant = gyroFilterConstantBackup;
+  initSensor(50);
 
   // Connect to Wifi and setup OTA if known Wifi network cannot be found
   boolean wifiConnected = 0;
@@ -372,7 +367,7 @@ void loop() {
         pidAngle.setpoint = pidSpeedOutput;
       }
 
-      pidAngle.input = filterAngleOffset;
+      pidAngle.input = filterAngle;
       pidAngleOutput = pidAngle.calculate();
 
       avgMotSpeedSum += pidAngleOutput/2;
@@ -399,25 +394,24 @@ void loop() {
       }
 
       // Disable control if robot is almost horizontal. Re-enable if upright.
-      if (abs(filterAngleOffset)>70) {
+      if (abs(filterAngle)>70) {
         enableControl = 0;
         motLeft.speed = 0;
         motRight.speed = 0;
         digitalWrite(motEnablePin, 1); // Inverted action on enable pin
       }
     } else {
-      if (abs(filterAngleOffset)<0.5) {
+      if (abs(filterAngle)<0.5) { // (re-)enable and reset stuff
         enableControl = 1;
         controlMode = 1;
         avgMotSpeedSum = 0;
         motLeft.setStep(0);
         motRight.setStep(0);
-        pidAngle.resetDTerm();
-        pidPos.resetDTerm();
-        pidSpeed.resetDTerm();
-        pidSpeed.resetIntegrator();
+        pidAngle.reset();
+        pidPos.reset();
+        pidSpeed.reset();
         digitalWrite(motEnablePin, 0); // Inverted action on enable pin
-        delay(1);
+        // delay(1);
       }
     }
 
@@ -679,11 +673,22 @@ void readSensor() {
 
   // accAngle = atan2f((float) ax, (float) az) * 180.0/M_PI;
   // deltaGyroAngle = -((float)((gy - gyroOffset[1])) / GYRO_SENSITIVITY) * dT * gyroGain;
-    accAngle = atan2f((float) ay, (float) az) * 180.0/M_PI;
+    accAngle = atan2f((float) ay, (float) az) * 180.0/M_PI - angleOffset;
     deltaGyroAngle = ((float)((gx - gyroOffset[0])) / GYRO_SENSITIVITY) * dT * gyroGain;
 
   filterAngle = gyroFilterConstant * (filterAngle + deltaGyroAngle) + (1 - gyroFilterConstant) * (accAngle);
-  filterAngleOffset = filterAngle - angleOffset;
+
+  // Serial << ay/1000.0 << "\t" << az/1000.0 << "\t" << accAngle << "\t" << filterAngle << endl;
+}
+
+void initSensor(uint8_t n) {
+  float gyroFilterConstantBackup = gyroFilterConstant;
+  gyroFilterConstant = 0.8;
+  for (uint8_t i=0; i<n; i++) {
+    readSensor();
+  }
+  gyroFilterConstant = gyroFilterConstantBackup;
+
 }
 
 void setMicroStep(uint8_t uStep) {

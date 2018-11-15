@@ -28,8 +28,9 @@ class PID {
 		void setParameters(float nK, float nTi, float nTd, float nN);
 		void updateParameters();
 		float calculate();
-		void resetIntegrator();
+		void resetITerm();
 		void resetDTerm();
+		void reset();
 
 		float setpoint, input;
 		uint8_t intDeadband;
