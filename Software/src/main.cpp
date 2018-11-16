@@ -89,7 +89,7 @@ fastStepper motLeft(5, 4, 0, motLeftTimerFunction);
 fastStepper motRight(2, 15, 1, motRightTimerFunction);
 
 uint8_t microStep = 32;
-uint8_t motorCurrent = 100;
+uint8_t motorCurrent = 150;
 float maxStepSpeed = 3000;
 
 // -- PID control
@@ -143,6 +143,18 @@ void IRAM_ATTR motRightTimerFunction() {
 
 void setMotorCurrent() {
   dacWrite(motorCurrentPin, motorCurrent);
+}
+
+uint8_t x = 0;
+void wirelessTask(void * parameters) {
+  while (1) {
+  IBus.loop();
+  wsServer.loop(); // Shouldn't this run on core 0?
+
+    // x++;
+    // Serial.println(x);
+    delay(1);
+  }
 }
 
 // ----- Main code
@@ -301,6 +313,15 @@ void setup() {
 
   pidSpeed.setParameters(6,5,0,20);
   pidSpeed.setpoint = 0;
+
+  xTaskCreatePinnedToCore(
+                    wirelessTask,   /* Function to implement the task */
+                    "wirelessTask", /* Name of the task */
+                    10000,      /* Stack size in words */
+                    NULL,       /* Task input parameter */
+                    1,          /* Priority of the task */
+                    NULL,       /* Task handle. */
+                    0);  /* Core where the task should run */
 
   Serial.println("Ready");
 }
@@ -481,9 +502,7 @@ void loop() {
 
   // Run other tasks
   ArduinoOTA.handle();
-  IBus.loop();
-  wsServer.loop(); // Shouldn't this run on core 0?
-
+  // delay(1);
 }
 
 void parseSerial() {

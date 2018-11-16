@@ -22,6 +22,12 @@ Hit the upload button. Currently, the auto reset functionality of the ESP32 modu
 ## OTA upload
 When the ESP32 boots, it's IP address is printed. In platformio.ini, fill in this IP address under upload_port. Or, even better, use the hostname balancingRobot.local. This means you don't have to mess around with IP addresses. Make sure to be connected to the same WiFi network as the ESP32, and hit upload.
 
+## File system
+Initially, or when changing the web page files, you need to upload the file system. To do so, open a terminal within the PlatformIO environment, and run:
+platformio run --target uploadfs
+
+This will upload all content of the data folder to the ESP32 flash memory (either via the serial port or OTA).
+
 # WiFi connection
 After flashing, the ESP32 will start an access point (AP), named balancingRobot. The default key is "turboturbo". Once connected, open the balancingRobot web configuration page. Here, among others, you can change the WiFi options. Under "WiFi configuration", enter the SSID and key of your home network, change the selector from "AP" to "SSID", and click the "set" button, followed by the "reboot" button. If all goes well, the ESP32 will now connect to your home network. 
 

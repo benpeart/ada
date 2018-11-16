@@ -29,10 +29,6 @@ void FlySkyIBus::begin(Stream& stream)
 
 void FlySkyIBus::loop(void)
 {
-  // static uint32_t tStart = 0;
-
-// if (state!=DISCARD && (millis()-tStart>2)) state = DISCARD;
-
   while (stream->available() > 0)
   {
     uint32_t now = millis();
