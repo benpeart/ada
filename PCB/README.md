@@ -32,19 +32,19 @@ IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By d
 
 IMU mounting
 <p float="left">
-  <img src="/PCB/pictures/DSCN4923.jpg" width="100" />
-  <img src="/PCB/pictures/DSCN4924.jpg" width="100" /> 
+  <img src="/PCB/pictures/DSCN4923.JPG" width="100" />
+  <img src="/PCB/pictures/DSCN4924.JPG" width="100" /> 
 </p>
 
 In the end, the PCB should look something like this
-![Stepper driver improvements](/PCB/pictures/DSCN4937.jpg)
+![Stepper driver improvements](/PCB/pictures/DSCN4937.JPG)
 
 ## Advanced
 You can de-solder the current adjustment potentiometer on the stepper driver breakout boards. Add a wire to the wiper terminal, and connect the (two) wires to J4. Current can then be adjusted via the web interface. Or, get creative, and implement some current saving functionality.
 
 For better performance, you can tie the decay mode pin of the DRV8825 to VCC, setting it in fast mode. The DRV8825 sometimes skips steps in slow/mixed decay mode. Below picture illustrates both improvements.
 
-![Stepper driver improvements](/PCB/pictures/DSCN4931.jpg)
+![Stepper driver improvements](/PCB/pictures/DSCN4931.JPG)
 
 # BOM
 Applicable for v1.1. v1.0 doesn't have R7.
