@@ -32,8 +32,8 @@ IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By d
 
 IMU mounting
 <p float="left">
-  <img src="/PCB/pictures/DSCN4923.JPG" width="100" />
-  <img src="/PCB/pictures/DSCN4924.JPG" width="100" /> 
+  <img src="/PCB/pictures/DSCN4923.JPG" width="300" />
+  <img src="/PCB/pictures/DSCN4924.JPG" width="300" /> 
 </p>
 
 In the end, the PCB should look something like this
