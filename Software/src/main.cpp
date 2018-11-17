@@ -89,7 +89,7 @@ fastStepper motLeft(5, 4, 0, motLeftTimerFunction);
 fastStepper motRight(2, 15, 1, motRightTimerFunction);
 
 uint8_t microStep = 32;
-uint8_t motorCurrent = 100;
+uint8_t motorCurrent = 150;
 float maxStepSpeed = 3000;
 
 // -- PID control
@@ -124,6 +124,9 @@ float gyroGain = 1.1;
 float steerFilterConstant = 0.7;
 float speedFilterConstant = 0.9;
 
+// -- WiFi
+const char host[] = "balancingrobot";
+
 // ----- Interrupt functions -----
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -140,6 +143,18 @@ void IRAM_ATTR motRightTimerFunction() {
 
 void setMotorCurrent() {
   dacWrite(motorCurrentPin, motorCurrent);
+}
+
+uint8_t x = 0;
+void wirelessTask(void * parameters) {
+  while (1) {
+  IBus.loop();
+  wsServer.loop(); // Shouldn't this run on core 0?
+
+    // x++;
+    // Serial.println(x);
+    delay(1);
+  }
 }
 
 // ----- Main code
@@ -230,7 +245,7 @@ void setup() {
     Serial.println(WiFi.softAPIP());
   }
 
-    ArduinoOTA.setHostname("balancingRobot");
+    ArduinoOTA.setHostname(host);
     ArduinoOTA
     .onStart([]() {
       String type;
@@ -257,7 +272,11 @@ void setup() {
 
   ArduinoOTA.begin();
 
-  Serial.println("Ready");
+  // Start DNS server
+  if (MDNS.begin(host)) {
+    Serial.print("MDNS responder started, name: ");
+    Serial.println(host);
+  }
 
   httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println("Loading index.htm");
@@ -275,6 +294,9 @@ void setup() {
   wsServer.begin();
   wsServer.onEvent(webSocketEvent);
 
+  MDNS.addService("http", "tcp", 80);
+  MDNS.addService("ws", "tcp", 81);
+
   // Make some funny sounds
   // for (uint8_t i=0; i<150; i++) {
   //   motRight.speed = 500 + i*10;
@@ -291,6 +313,17 @@ void setup() {
 
   pidSpeed.setParameters(6,5,0,20);
   pidSpeed.setpoint = 0;
+
+  xTaskCreatePinnedToCore(
+                    wirelessTask,   /* Function to implement the task */
+                    "wirelessTask", /* Name of the task */
+                    10000,      /* Stack size in words */
+                    NULL,       /* Task input parameter */
+                    1,          /* Priority of the task */
+                    NULL,       /* Task handle. */
+                    0);  /* Core where the task should run */
+
+  Serial.println("Ready");
 }
 
 
@@ -469,9 +502,7 @@ void loop() {
 
   // Run other tasks
   ArduinoOTA.handle();
-  IBus.loop();
-  wsServer.loop(); // Shouldn't this run on core 0?
-
+  // delay(1);
 }
 
 void parseSerial() {

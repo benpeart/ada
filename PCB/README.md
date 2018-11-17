@@ -24,12 +24,27 @@ Assembly is quite straightforward. For those who like some instructions, here go
 
 1. Start with the SMD components on the bottom side. First, pre-tin one pad, then place the SMD component while reheating the first pad. Finally, solder the second pad. C5 is not mounted.
 2. Next, mount the voltage regulator module U3. Use some wires to connect the 4 pads to the PCB.
-3. Place the IMU (U2) with the angled male and female headers. Make sure that the IMU is rigidly mounted. If you don't, the IMU might for example vibrate during operation, causing unstable behaviour.
+3. Place the IMU (U2) with the angled male and female headers. Make sure that the IMU is rigidly mounted. If you don't, the IMU might for example vibrate during operation, causing unstable behaviour. See below pictures for clarification.
 4. Add all female headers (J1, J4, J7, and for the stepper driver and ESP32 modules). Optionally, place some headers on J5 and J2 if you like.
 5. Finally, place C2, C4 and F1.
 
 IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By default, the voltage regulator is set to a higher voltage, and if you don't adjust it, you'll fry some components. 
 
+IMU mounting
+<p float="left">
+  <img src="/PCB/pictures/DSCN4923.JPG" width="300" />
+  <img src="/PCB/pictures/DSCN4924.JPG" width="300" /> 
+</p>
+
+In the end, the PCB should look something like this
+![Stepper driver improvements](/PCB/pictures/DSCN4937.JPG)
+
+## Advanced
+You can de-solder the current adjustment potentiometer on the stepper driver breakout boards. Add a wire to the wiper terminal, and connect the (two) wires to J4. Current can then be adjusted via the web interface. Or, get creative, and implement some current saving functionality.
+
+For better performance, you can tie the decay mode pin of the DRV8825 to VCC, setting it in fast mode. The DRV8825 sometimes skips steps in slow/mixed decay mode. Below picture illustrates both improvements.
+
+![Stepper driver improvements](/PCB/pictures/DSCN4931.JPG)
 
 # BOM
 Applicable for v1.1. v1.0 doesn't have R7.
@@ -44,13 +59,15 @@ Applicable for v1.1. v1.0 doesn't have R7.
 | 1   | J1                     | Female header, cut to size               |
 | 1   | J2                     | N/A, solder whatever you like here       |
 | 1   | J3                     | Screw terminal, or solder wires directly |
-| 2   | J4, J7                 | Female header, cut to size               |
+| 2   | J4, J7                 | 4 pin (fe)male header, cut to size       |
 | 1   | J5                     | Male header, cut to size                 |
 | 6   | R1, R2, R3, R4, R6, R7 | 3k3 resistor, 0805 SMD                   |
 | 1   | R5                     | 100k resistor, 0805 SMD                  |
 | 1   | U1                     | ESP32 devKit module, 30 pins             |
 | 1   | U2                     | MPU6050 breakout, 8 pins                 |
 | 1   | U3                     | Buck converter module                    |
+
+Additionally, you'll need a pair of 8 pin male/female angled headers, for mounting the IMU. For mounting the ESP32 and stepper driver modules, you'll need 2 times 15 and 16 pin female headers (4 in total).
 
 Some examples of the modules:
 * [ESP32 Devkit V1 module, 30 pins](https://www.aliexpress.com/item/ESP32-Development-Board-WiFi-Bluetooth-Ultra-Low-Power-Consumption-Dual-Core-ESP-32-ESP-32S/32802431728.html?spm=a2g0s.9042311.0.0.26604c4dM62q0I)
