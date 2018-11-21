@@ -23,6 +23,7 @@ To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/
 
 class PID {
 	public:
+		PID(void);
 		PID(uint8_t controllerType, float dT, float max, float min);
 
 		void setParameters(float nK, float nTi, float nTd, float nN);
@@ -37,18 +38,19 @@ class PID {
 		float minOutput, maxOutput;
 
 		uint8_t controllerType;
-		float K, Ti, Td, N;
+		float K, Ti, Td, N, R;
 
 		bool resetInt;
 
 	private:
+		void init();
 		float outputFilter(float x);
 
 		float _dT;
 		float _lastDterm;
 		float _sumError;
 		float _Pterm, _Iterm, _Dterm;
-		float _lastError, _lastInput;
+		float _lastError, _lastInput, _lastSetpoint;
 		float _if, _df1, _df2;
 		float v[3];
 

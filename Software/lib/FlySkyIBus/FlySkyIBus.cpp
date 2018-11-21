@@ -54,7 +54,7 @@ void FlySkyIBus::loop(void)
         {
           state = GET_LENGTH;
           while(Serial.available() > 0) {
-            char t = Serial.read();
+            Serial.read();
           }
         }
         break;

@@ -31,6 +31,7 @@ Also, you have to publish all modifications.
 #include <SPIFFS.h>
 #include <SPIFFSEditor.h>
 #include <fastStepper.h>
+#include <par.h>
 
 // ----- Type definitions
 typedef union {
@@ -71,7 +72,7 @@ AsyncWebServer httpServer(80);
 WebSocketsServer wsServer = WebSocketsServer(81);
 
 // -- EEPROM
-#define EEPROM_SIZE 256
+#define EEPROM_SIZE 1024
 #define EEPROM_ADR_INIT 0
 #define EEPROM_ADR_GYRO_OFFSET 50
 #define EEPROM_ADR_ANGLE_OFFSET 60
@@ -95,6 +96,12 @@ float maxStepSpeed = 3000;
 // -- PID control
 #define dT_MICROSECONDS 5000
 #define dT dT_MICROSECONDS/1000000.0
+
+#define PID_ANGLE 0
+#define PID_POS 1
+#define PID_SPEED 2
+
+PID pid[3];
 
 #define PID_ANGLE_MAX 20
 PID pidAngle(cPD, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
@@ -145,14 +152,10 @@ void setMotorCurrent() {
   dacWrite(motorCurrentPin, motorCurrent);
 }
 
-uint8_t x = 0;
 void wirelessTask(void * parameters) {
   while (1) {
-  IBus.loop();
-  wsServer.loop(); // Shouldn't this run on core 0?
-
-    // x++;
-    // Serial.println(x);
+    IBus.loop();
+    wsServer.loop(); // Shouldn't this run on core 0?
     delay(1);
   }
 }
@@ -276,6 +279,8 @@ void setup() {
   if (MDNS.begin(host)) {
     Serial.print("MDNS responder started, name: ");
     Serial.println(host);
+  } else {
+    Serial.println("Could not start MDNS responder");
   }
 
   httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -305,15 +310,20 @@ void setup() {
   // }
 
   dacWrite(motorCurrentPin, motorCurrent);
+
   pidAngle.setParameters(0.65,0,0.075,15);
-  pidAngle.setpoint = 0;
-
   pidPos.setParameters(1,0,1.2,20);
-  pidPos.setpoint = 0;
-
   pidSpeed.setParameters(6,5,0,20);
-  pidSpeed.setpoint = 0;
 
+  float a = 1.2, b = 3.341;
+  uint8_t c = 123, d = 245;
+  parameter p[] = {{&a}, {&b}, {&c}, {&d}};
+
+  for (uint8_t i=0; i<4; i++) {
+    Serial << i << "\t"<< p[i].tag << "\t" << (*p[i].p) << "\t" << p[i].cmd << "\t" << p[i].address << endl;
+  }
+
+  // Run wirless related tasks on core 0
   xTaskCreatePinnedToCore(
                     wirelessTask,   /* Function to implement the task */
                     "wirelessTask", /* Name of the task */
