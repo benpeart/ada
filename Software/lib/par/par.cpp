@@ -28,48 +28,47 @@ Maybe add both command parameters to parameter definition?
 
 To do:
 Check if address counter is smaller than EEPROM size
+Same for command
+Add option for manually specifying command
+
+Idea:
+Add a save command, to save all parameters (both start and end address are known);
 */
 
-// float a,b,c;
-// uint8_t d;
 
-// parameter pars[4] = {
-//   {(uint8_t*) &a,    t_f,  0,   EEPROM_ADR_PID + 0},
-//   {(uint8_t*) &b,   t_f,  1,   EEPROM_ADR_PID + 1},
-//   {(uint8_t*) &c,   t_f,  2,   EEPROM_ADR_PID + 2},
-//   {(uint8_t*) &d,    t_u8,  3,   EEPROM_ADR_PID + 3}
-// };
 
 int parameter::addressCounter = 300;
 uint8_t parameter::cmdCounter = 0;
 
-parameter::parameter(uint8_t* _p, uint8_t _tag, uint8_t _cmd, int _address) {
-  p = _p;
-  tag = _tag;
-  cmd = _cmd;
-  address = _address;
-}
-
-parameter::parameter(uint8_t* _p, uint8_t _tag) {
-  p = _p;
-  tag = _tag;
-
-  cmd = cmdCounter++;
-  address = addressCounter;
-  addressCounter += tagSize[tag];
-}
+// parameter::parameter(uint8_t* _p, uint8_t _tag, uint8_t _cmd, int _address) {
+//   p = _p;
+//   tag = _tag;
+//   cmd = _cmd;
+//   address = _address;
+// }
+//
+// parameter::parameter(uint8_t* _p, uint8_t _tag) {
+//   p = _p;
+//   tag = _tag;
+//
+//   cmd = cmdCounter++;
+//   address = addressCounter;
+//   addressCounter += tagSize[tag];
+// }
 
 parameter::parameter(uint8_t* _p) {
-  p = (uint8_t*) _p;
+  p_u8 = _p;
   tag = t_u8;
-  cmd = cmdCounter++;
-  address = addressCounter;
-  addressCounter += tagSize[tag];
+  assignAddress();
 }
 
 parameter::parameter(float* _p) {
-  p = (uint8_t*) _p;
+  p_f = _p;
   tag = t_f;
+  assignAddress();
+}
+
+void parameter::assignAddress(void) {
   cmd = cmdCounter++;
   address = addressCounter;
   addressCounter += tagSize[tag];
@@ -78,67 +77,57 @@ parameter::parameter(float* _p) {
 void parameter::read(void) {
   switch(tag) {
     case t_u8:
-      *p = EEPROM.read(address);
+      *p_u8 = EEPROM.read(address);
+      break;
+    case t_f:
+      *p_f = EEPROM.readFloat(address);
       break;
   }
+  Serial.println(EEPROM.read(address));
 }
 
 void parameter::write(void) {
   switch(tag) {
     case t_u8:
-      EEPROM.write(address, *p);
+      EEPROM.write(address, *p_u8);
       break;
+    case t_u16:
+      EEPROM.writeUShort(address, *p_u16);
+      break;
+    case t_u32:
+      break;
+    case t_i8:
+      break;
+    case t_i16:
+      break;
+    case t_i32:
+      break;
+    case t_f:
+      EEPROM.writeFloat(address, *p_f);
+      break;
+    case t_d:
+      break;
+
   }
+  EEPROM.commit();
 }
 
-// void readPIDParameters(PID* pid) {
-//
-//   parameter pars[4] = {
-//     {(uint8_t*) &pid[0].K,    t_f,  0,   EEPROM_ADR_PID + 0},
-//     {(uint8_t*) &pid[0].Ti,   t_f,  1,   EEPROM_ADR_PID + 1},
-//     {(uint8_t*) &pid[1].N,   t_f,  2,   EEPROM_ADR_PID + 2},
-//     {(uint8_t*) &pid[1].controllerType,    t_u8,  3,   EEPROM_ADR_PID + 3}
-//   };
-//
-//   // pars[0].f = &pid[0].K;
-//   // If parameters have never been written to EEPROM, don't read parameters (EEPROM will contain gibberish)
-//   if (EEPROM.read(EEPROM_ADR_PID_WRITTEN)==EEPROM_WRITTEN) {
-//     for (uint8_t i=0; i<3; i++) {
-//       pid[i].K          = EEPROM.readFloat(EEPROM_ADR_PID + i*30 + 4*0);
-//       pid[i].Ti         = EEPROM.readFloat(EEPROM_ADR_PID + i*30 + 4*1);
-//       pid[i].Td         = EEPROM.readFloat(EEPROM_ADR_PID + i*30 + 4*2);
-//       pid[i].N          = EEPROM.readFloat(EEPROM_ADR_PID + i*30 + 4*3);
-//       pid[i].R          = EEPROM.readFloat(EEPROM_ADR_PID + i*30 + 4*4);
-//       pid[i].minOutput  = EEPROM.readFloat(EEPROM_ADR_PID + i*30 + 4*5);
-//       pid[i].maxOutput  = EEPROM.readFloat(EEPROM_ADR_PID + i*30 + 4*6);
-//       pid[i].controllerType  = EEPROM.read(EEPROM_ADR_PID + i*30 + 4*7);
-//       pid[i].updateParameters();
-//     }
-//   }
-// }
-//
-// void writePIDParameters(PID* pid) {
-//   for (uint8_t i=0; i<3; i++) {
-//     EEPROM.writeFloat(EEPROM_ADR_PID + i*30 + 4*0, pid[i].K);
-//     EEPROM.writeFloat(EEPROM_ADR_PID + i*30 + 4*1, pid[i].Ti);
-//     EEPROM.writeFloat(EEPROM_ADR_PID + i*30 + 4*2, pid[i].Td);
-//     EEPROM.writeFloat(EEPROM_ADR_PID + i*30 + 4*3, pid[i].N);
-//     EEPROM.writeFloat(EEPROM_ADR_PID + i*30 + 4*4, pid[i].R);
-//     EEPROM.writeFloat(EEPROM_ADR_PID + i*30 + 4*5, pid[i].minOutput);
-//     EEPROM.writeFloat(EEPROM_ADR_PID + i*30 + 4*6, pid[i].maxOutput);
-//     EEPROM.write(EEPROM_ADR_PID + i*30 + 4*7, pid[i].controllerType);
-//     EEPROM.write(EEPROM_ADR_PID_WRITTEN, EEPROM_WRITTEN);
-//     EEPROM.commit();
-//   }
-// }
-//
-// void readParameter(parameter p) {
-//   switch (p.tag) {
-//     case t_f:
-//       1;
-//       break;
-//     case t_u8:
-//       2;
-//       break;
-//   }
-// }
+// Use binary values or text for messages?
+// Send everything as float?
+
+// Add 2nd class for making groups of commands.
+// Properties: groupNo, number of items, array of parameters
+// EEPROM bit/byte to indicate if settings have been stored
+// Functions: read / write group from/to EEPROM,
+// Specify group as array of adresses, then loop through them. 
+uint8_t parameter::makeMessageBin(uint8_t* p) {
+  // Command (2 bytes), value (1-4 bytes)
+  // How to handle different variable types? Send everything as float, or send variable type as well
+  uint8_t length = 0;
+
+  p[0] = command;
+}
+
+void parameter::makeMessageText(char* c) {
+
+}

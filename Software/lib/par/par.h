@@ -15,13 +15,26 @@
 // void readPIDParameters(PID* pid);
 // void writePIDParameters(PID* pid);
 
+
+
 enum tag {t_u8,t_u16,t_u32,t_i8,t_i16,t_i32,t_f,t_d};
 const uint8_t tagSize[] = {1,2,4,1,2,4,4,8};
 
 
 class parameter {
 public:
-  uint8_t* p;
+  // uint8_t* p;
+  union {
+    uint8_t * p_u8;
+    uint16_t * p_u16;
+    uint32_t * p_u32;
+    int8_t * p_i8;
+    int16_t * p_i16;
+    int32_t * p_i32;
+    float * p_f;
+    double * p_d;
+  };
+
   int address;
   uint8_t cmd;
   uint8_t tag;
@@ -30,14 +43,16 @@ public:
   static uint8_t cmdCounter;
 
 
-  parameter(uint8_t* _p, uint8_t _tag, uint8_t _cmd, int _address);
-  parameter(uint8_t* _p, uint8_t _tag);
+  // parameter(uint8_t* _p, uint8_t _tag, uint8_t _cmd, int _address);
+  // parameter(uint8_t* _p, uint8_t _tag);
   parameter(uint8_t* _p);
   parameter(float* _p);
 
   void read(void);
   void write(void);
 
+private:
+  void assignAddress(void);
 };
 
 

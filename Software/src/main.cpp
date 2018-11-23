@@ -315,13 +315,19 @@ void setup() {
   pidPos.setParameters(1,0,1.2,20);
   pidSpeed.setParameters(6,5,0,20);
 
-  float a = 1.2, b = 3.341;
-  uint8_t c = 123, d = 245;
-  parameter p[] = {{&a}, {&b}, {&c}, {&d}};
+  // float a = 1.2, b = 3.341;
+  // uint8_t c = 123, d = 245;
+    float a = 2.1, b = 1.341;
+    uint8_t c = 223, d = 145;
+  parameter p[] = {{&pid[0].K}, {&pid[0].Ti}, {&pid[0].Td}, {&pid[0].N}};
 
+  Serial << a << "\t" << b << "\t" << c << "\t" << d << endl;
   for (uint8_t i=0; i<4; i++) {
-    Serial << i << "\t"<< p[i].tag << "\t" << (*p[i].p) << "\t" << p[i].cmd << "\t" << p[i].address << endl;
+    Serial << i << "\t"<< p[i].tag << "\t" << p[i].cmd << "\t" << p[i].address << endl;
+    // p[i].write();
+    p[i].read();
   }
+  Serial << a << "\t" << b << "\t" << c << "\t" << d << endl;
 
   // Run wirless related tasks on core 0
   xTaskCreatePinnedToCore(
