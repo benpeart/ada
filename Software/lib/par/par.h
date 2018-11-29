@@ -3,6 +3,7 @@
 
 #include<Arduino.h>
 #include<PID.h>
+#include<WebSocketsServer.h>
 
 #define EEPROM_ADR_PID_WRITTEN 200
 #define EEPROM_ADR_PID 201
@@ -20,8 +21,25 @@
 enum tag {t_u8,t_u16,t_u32,t_i8,t_i16,t_i32,t_f,t_d};
 const uint8_t tagSize[] = {1,2,4,1,2,4,4,8};
 
+typedef union {
+  struct {
+    uint8_t cmd1;
+    uint8_t cmd2;
+    union {
+      float val;
+      uint8_t valU8[4];
+    };
+  };
+  uint8_t arr[6];
+}  cmd;
 
-class parameter {
+// typedef union {
+//   uint8_t u8[4];
+//   float f;
+// } floatToByte;
+
+
+class par {
 public:
   // uint8_t* p;
   union {
@@ -43,36 +61,30 @@ public:
   static uint8_t cmdCounter;
 
 
-  // parameter(uint8_t* _p, uint8_t _tag, uint8_t _cmd, int _address);
-  // parameter(uint8_t* _p, uint8_t _tag);
-  parameter(uint8_t* _p);
-  parameter(float* _p);
+  // par(uint8_t* _p, uint8_t _tag, uint8_t _cmd, int _address);
+  // par(uint8_t* _p, uint8_t _tag);
+  par(uint8_t* _p);
+  par(float* _p);
 
   void read(void);
   void write(void);
+  float getFloat(void);
 
 private:
   void assignAddress(void);
 };
 
+class parList {
+public:
+  parList(par* _l);
+  void sendList(WebSocketsServer wsServer);
+  void parseMessage(uint8_t* c);
 
+  static uint8_t groupCounter;
+  uint8_t groupNo;
+  uint8_t numPar;
+private:
+  par* l;
 
-// typedef struct {
-//   // union {
-//   //   uint8_t * u8;
-//   //   uint16_t * u16;
-//   //   uint32_t * u32;
-//   //   int8_t * i8;
-//   //   int16_t * i16;
-//   //   int32_t * i32;
-//   //   float * f;
-//   //   double * d;
-//   // };
-//   uint8_t *p;
-//   uint8_t tag;
-//   uint8_t cmdNo;
-//   uint16_t address;
-//   // void getFun() {};
-// } parameter;
-
+};
 #endif

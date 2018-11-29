@@ -1,5 +1,6 @@
 #include <par.h>
 #include <EEPROM.h>
+#include <Streaming.h>
 
 /*
 How to pass objects to be modified?
@@ -37,44 +38,50 @@ Add a save command, to save all parameters (both start and end address are known
 
 
 
-int parameter::addressCounter = 300;
-uint8_t parameter::cmdCounter = 0;
+int par::addressCounter = 300;
+uint8_t par::cmdCounter = 0;
+uint8_t parList::groupCounter = 0;
 
-// parameter::parameter(uint8_t* _p, uint8_t _tag, uint8_t _cmd, int _address) {
-//   p = _p;
-//   tag = _tag;
-//   cmd = _cmd;
-//   address = _address;
-// }
-//
-// parameter::parameter(uint8_t* _p, uint8_t _tag) {
-//   p = _p;
-//   tag = _tag;
-//
-//   cmd = cmdCounter++;
-//   address = addressCounter;
-//   addressCounter += tagSize[tag];
-// }
+parList::parList(par* _l) {
+  l = _l;
+  groupNo = groupCounter++;
+  numPar = par::cmdCounter;
+  par::cmdCounter = 0;
+}
 
-parameter::parameter(uint8_t* _p) {
+void parList::sendList(WebSocketsServer wsServer) {
+  uint8_t buf[6];
+  cmd c;
+
+  c.cmd1 = groupNo;
+
+  for (uint8_t i=0; i<numPar; i++) {
+    Serial << groupNo << "\t" << l[i].cmd << "\t" << l[i].getFloat() << endl;
+    c.cmd2 = l[i].cmd;
+    c.val = l[i].getFloat();
+    wsServer.sendBIN(0,c.arr,6);
+  }
+}
+
+par::par(uint8_t* _p) {
   p_u8 = _p;
   tag = t_u8;
   assignAddress();
 }
 
-parameter::parameter(float* _p) {
+par::par(float* _p) {
   p_f = _p;
   tag = t_f;
   assignAddress();
 }
 
-void parameter::assignAddress(void) {
+void par::assignAddress(void) {
   cmd = cmdCounter++;
   address = addressCounter;
   addressCounter += tagSize[tag];
 }
 
-void parameter::read(void) {
+void par::read(void) {
   switch(tag) {
     case t_u8:
       *p_u8 = EEPROM.read(address);
@@ -86,7 +93,7 @@ void parameter::read(void) {
   Serial.println(EEPROM.read(address));
 }
 
-void parameter::write(void) {
+void par::write(void) {
   switch(tag) {
     case t_u8:
       EEPROM.write(address, *p_u8);
@@ -112,22 +119,52 @@ void parameter::write(void) {
   EEPROM.commit();
 }
 
+float par::getFloat(void) {
+  switch (tag) {
+    case t_u8:
+      return ((float) *p_u8);
+      break;
+    case t_f:
+      return ((float) *p_f);
+      break;
+  }
+}
+
 // Use binary values or text for messages?
 // Send everything as float?
 
 // Add 2nd class for making groups of commands.
 // Properties: groupNo, number of items, array of parameters
 // EEPROM bit/byte to indicate if settings have been stored
+// (pointer to) function for updating
 // Functions: read / write group from/to EEPROM,
-// Specify group as array of adresses, then loop through them. 
-uint8_t parameter::makeMessageBin(uint8_t* p) {
-  // Command (2 bytes), value (1-4 bytes)
-  // How to handle different variable types? Send everything as float, or send variable type as well
-  uint8_t length = 0;
+// Specify group as array of adresses, then loop through them.
 
-  p[0] = command;
-}
 
-void parameter::makeMessageText(char* c) {
+// How to implement a save button? I.e. how to define an action that has no variable, but executes a function?
+// Maybe set cmd 0 to save all variables, and cmd 1 to return all variables. Or, 254 and 255.
 
-}
+// When receiving a message, all "groups"/lists should receive it.
+// Or, do the "group" handling in main. Also allows for implementing custom requests.
+
+/* So, the proposed workflow is:
+- Create multiple arrays of grouped parameter objects
+- Pass them to corresponding list objects. Or, use non-class function.
+- Have a command for sending all variable values
+- For incoming message, first byte is command 1. Switch statement points to correct group of variables.
+-
+*/
+
+// Maybe have a list of parameter groups? Allows to nicely index when command is received.
+
+// uint8_t par::makeMessageBin(uint8_t* p) {
+//   // Command (2 bytes), value (1-4 bytes)
+//   // How to handle different variable types? Send everything as float, or send variable type as well
+//   uint8_t length = 0;
+//
+//   p[0] = command;
+// }
+//
+// void par::makeMessageText(char* c) {
+//
+// }
