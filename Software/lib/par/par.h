@@ -77,7 +77,7 @@ private:
 class parList {
 public:
   parList(par* _l);
-  void sendList(WebSocketsServer wsServer);
+  void sendList(WebSocketsServer *wsServer);
   void parseMessage(uint8_t* c);
 
   static uint8_t groupCounter;

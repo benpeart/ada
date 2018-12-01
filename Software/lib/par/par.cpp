@@ -49,7 +49,7 @@ parList::parList(par* _l) {
   par::cmdCounter = 0;
 }
 
-void parList::sendList(WebSocketsServer wsServer) {
+void parList::sendList(WebSocketsServer *wsServer) {
   uint8_t buf[6];
   cmd c;
 
@@ -59,7 +59,7 @@ void parList::sendList(WebSocketsServer wsServer) {
     Serial << groupNo << "\t" << l[i].cmd << "\t" << l[i].getFloat() << endl;
     c.cmd2 = l[i].cmd;
     c.val = l[i].getFloat();
-    wsServer.sendBIN(0,c.arr,6);
+    wsServer->sendBIN(0,c.arr,6);
   }
 }
 

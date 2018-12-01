@@ -135,7 +135,8 @@ float speedFilterConstant = 0.9;
 const char host[] = "balancingrobot";
 
 // ----- Parameter definitions -----
-par pidPar[] = {{&pid[0].K}, {&pid[0].Ti}, {&pid[0].Td}, {&pid[0].N}};
+par pidPar[] = {{&pid[0].K}, {&pid[0].Ti}, {&pid[0].Td}, {&pid[0].N}, {&pid[0].R}, {&pid[0].minOutput}, {&pid[0].minOutput}};
+// Use default arguments for PID constructor
 parList pidParList(pidPar);
 
 // ----- Interrupt functions -----
@@ -156,10 +157,14 @@ void setMotorCurrent() {
   dacWrite(motorCurrentPin, motorCurrent);
 }
 
+void sendData(uint8_t *b, uint8_t l) {
+  wsServer.sendBIN(0,b,l);
+}
+
 void wirelessTask(void * parameters) {
   while (1) {
     IBus.loop();
-    wsServer.loop(); // Shouldn't this run on core 0?
+    wsServer.loop();
     delay(1);
   }
 }
@@ -629,7 +634,7 @@ void parseCommand(char* data, uint8_t length) {
           case 'r':
             // Serial.println("Rebooting...");
             // ESP.restart();
-            pidParList.sendList(wsServer);
+            pidParList.sendList(&wsServer);
             break;
           case 'l': // Send wifi networks to WS client
             sendWifiList();
