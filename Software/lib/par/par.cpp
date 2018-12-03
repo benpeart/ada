@@ -47,6 +47,8 @@ parList::parList(par* _l) {
   groupNo = groupCounter++;
   numPar = par::cmdCounter;
   par::cmdCounter = 0;
+
+  flagAddress = par::addressCounter++;
 }
 
 void parList::sendList(WebSocketsServer *wsServer) {
@@ -60,6 +62,24 @@ void parList::sendList(WebSocketsServer *wsServer) {
     c.cmd2 = l[i].cmd;
     c.val = l[i].getFloat();
     wsServer->sendBIN(0,c.arr,6);
+  }
+}
+
+void parList::write(void) {
+  for (uint8_t i=0; i<numPar; i++) {
+    l[i].write();
+  }
+  EEPROM.write(flagAddress, EEPROM_WRITTEN);
+  EEPROM.commit();
+}
+
+void parList::read(void) {
+  uint8_t flag = EEPROM.read(flagAddress);
+  Serial << flag << endl;
+  if (flag==EEPROM_WRITTEN) { // Only read if EEPROM has been written to
+    for (uint8_t i=0; i<numPar; i++) {
+      l[i].read();
+    }
   }
 }
 
@@ -90,7 +110,7 @@ void par::read(void) {
       *p_f = EEPROM.readFloat(address);
       break;
   }
-  Serial.println(EEPROM.read(address));
+  // Serial.println(EEPROM.read(address));
 }
 
 void par::write(void) {
@@ -116,7 +136,6 @@ void par::write(void) {
       break;
 
   }
-  EEPROM.commit();
 }
 
 float par::getFloat(void) {

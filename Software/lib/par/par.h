@@ -22,6 +22,7 @@ enum tag {t_u8,t_u16,t_u32,t_i8,t_i16,t_i32,t_f,t_d};
 const uint8_t tagSize[] = {1,2,4,1,2,4,4,8};
 
 typedef union {
+  uint8_t arr[6];
   struct {
     uint8_t cmd1;
     uint8_t cmd2;
@@ -29,9 +30,8 @@ typedef union {
       float val;
       uint8_t valU8[4];
     };
-  };
-  uint8_t arr[6];
-}  cmd;
+  }  __attribute__((packed));
+} cmd;
 
 // typedef union {
 //   uint8_t u8[4];
@@ -79,10 +79,14 @@ public:
   parList(par* _l);
   void sendList(WebSocketsServer *wsServer);
   void parseMessage(uint8_t* c);
+  void read(void);
+  void write(void);
 
   static uint8_t groupCounter;
   uint8_t groupNo;
   uint8_t numPar;
+
+  uint16_t flagAddress;
 private:
   par* l;
 

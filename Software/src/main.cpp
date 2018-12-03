@@ -101,8 +101,6 @@ float maxStepSpeed = 3000;
 #define PID_POS 1
 #define PID_SPEED 2
 
-PID pid[3];
-
 #define PID_ANGLE_MAX 20
 PID pidAngle(cPD, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
 #define PID_POS_MAX 35
@@ -135,7 +133,10 @@ float speedFilterConstant = 0.9;
 const char host[] = "balancingrobot";
 
 // ----- Parameter definitions -----
-par pidPar[] = {{&pid[0].K}, {&pid[0].Ti}, {&pid[0].Td}, {&pid[0].N}, {&pid[0].R}, {&pid[0].minOutput}, {&pid[0].minOutput}};
+par pidPar[] = {&pidAngle.K, &pidAngle.Ti, &pidAngle.Td, &pidAngle.N, &pidAngle.R, &pidAngle.minOutput, &pidAngle.maxOutput, &pidAngle.controllerType,
+  &pidPos.K, &pidPos.Ti, &pidPos.Td, &pidPos.N, &pidPos.R, &pidPos.minOutput, &pidPos.maxOutput, &pidPos.controllerType,
+  &pidSpeed.K, &pidSpeed.Ti, &pidSpeed.Td, &pidSpeed.N, &pidSpeed.R, &pidSpeed.minOutput, &pidSpeed.maxOutput, &pidSpeed.controllerType};
+
 // Use default arguments for PID constructor
 parList pidParList(pidPar);
 
@@ -338,7 +339,6 @@ void setup() {
 
   Serial.println("Ready");
 
-  pid[0].setParameters(1,2,3,4);
 }
 
 
@@ -840,13 +840,30 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             // send data to all connected clients
             // webSocket.broadcastTXT("message here");
             break;
-        case WStype_BIN:
+        case WStype_BIN: {
             Serial.printf("[%u] get binary length: %u\n", num, length);
             hexdump(payload, length);
 
-            // send message to client
-            // webSocket.sendBIN(num, payload, length);
+            if (length==6) {
+              cmd c;
+              memcpy(c.arr, payload, 6);
+              Serial << c.cmd1 << "\t" << c.cmd2 << "\t" << c.val << "\t" << sizeof(cmd) << endl;
+
+              // if (c.cmd1<parList::groupNo) {
+                if (c.cmd2==253) {
+                  pidParList.sendList(&wsServer);
+                }
+                if (c.cmd2==254) {
+                  pidParList.read();
+                }
+                if (c.cmd2==255) {
+                  pidParList.write();
+                }
+              // }
+            }
+
             break;
+          }
 		case WStype_ERROR:
 		case WStype_FRAGMENT_TEXT_START:
 		case WStype_FRAGMENT_BIN_START:

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<script>
+var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']);
+connection.binaryType = 'arraybuffer';
+connection.onopen = function () {  
+	<!-- connection.send('Connect ' + new Date());  -->
+}; 
+connection.onerror = function (error) {    
+	console.log('WebSocket Error ', error);
+};
+connection.onmessage = function (e) {  
+  if (typeof(e.data)=='string') { // Text frame
+		console.log('Server: ', e.data);
+		// if (e.data[0]=='c') {
+		//   cmd = e.data.substr(0,3);
+		//   val = e.data.substr(3);
+		// } else if (e.data[0]=='w') {
+		//   var str = e.data.substr(1);
+		//   parseWifiCommand(str);
+		// } else {
+		//   cmd = e.data.substr(0,1);
+		//   val = e.data.substr(1);
+		// }
+		// document.getElementById(cmd).value = parseFloat(val);
+  } else { // Binary frame
+    var dv = new DataView(e.data);
+    var cmd1 = dv.getUint8(0);
+    var cmd2 = dv.getUint8(1);
+    var val = dv.getFloat32(2,true);
+    console.log(cmd1 + ' ' + cmd2 + ' ' + val);
+  }
+};
+
+function sendCommand(cmd1, cmd2, val) {
+  var buf = new ArrayBuffer(6);
+  var dv = new DataView(buf);
+  dv.setUint8(0,cmd1);
+  dv.setUint8(1,cmd2);
+  dv.setFloat32(2,val,true);
+  console.log(buf);
+  console.log(dv);
+  connection.send(buf);
+}
+</script>
+</head>
+
+<body>
+<form>
+  <button type="button" onclick="sendCommand(0,253,1.245)">Send</button>
+  <button type="button" onclick="sendCommand(0,254,1.245)">Read</button>
+  <button type="button" onclick="sendCommand(0,255,0)">Write</button>
+</form>
+</body>
