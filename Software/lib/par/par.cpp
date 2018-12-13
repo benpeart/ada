@@ -55,11 +55,11 @@ void parList::sendList(WebSocketsServer *wsServer) {
   uint8_t buf[6];
   cmd c;
 
-  c.cmd1 = groupNo;
+  c.grp = groupNo;
 
   for (uint8_t i=0; i<numPar; i++) {
     Serial << groupNo << "\t" << l[i].cmd << "\t" << l[i].getFloat() << endl;
-    c.cmd2 = l[i].cmd;
+    c.cmd = l[i].cmd;
     c.val = l[i].getFloat();
     wsServer->sendBIN(0,c.arr,6);
   }
@@ -75,12 +75,15 @@ void parList::write(void) {
 
 void parList::read(void) {
   uint8_t flag = EEPROM.read(flagAddress);
-  Serial << flag << endl;
-  if (flag==EEPROM_WRITTEN) { // Only read if EEPROM has been written to
+  if (flag==EEPROM_WRITTEN) { // Only read if EEPROM has been written to previously
     for (uint8_t i=0; i<numPar; i++) {
       l[i].read();
     }
   }
+}
+
+void parList::set(uint8_t cmd, float f) {
+  l[cmd].setFloat(f);
 }
 
 par::par(uint8_t* _p) {
@@ -149,6 +152,17 @@ float par::getFloat(void) {
   }
 }
 
+// Update value based on pointer
+void par::setFloat(float f) {
+  switch (tag) {
+    case t_u8:
+      *p_u8 = (uint8_t) f;
+      break;
+    case t_f:
+      *p_f = f;
+      break;
+  }
+}
 // Use binary values or text for messages?
 // Send everything as float?
 

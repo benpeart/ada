@@ -24,8 +24,8 @@ const uint8_t tagSize[] = {1,2,4,1,2,4,4,8};
 typedef union {
   uint8_t arr[6];
   struct {
-    uint8_t cmd1;
-    uint8_t cmd2;
+    uint8_t grp;
+    uint8_t cmd;
     union {
       float val;
       uint8_t valU8[4];
@@ -69,6 +69,7 @@ public:
   void read(void);
   void write(void);
   float getFloat(void);
+  void setFloat(float f);
 
 private:
   void assignAddress(void);
@@ -78,9 +79,10 @@ class parList {
 public:
   parList(par* _l);
   void sendList(WebSocketsServer *wsServer);
-  void parseMessage(uint8_t* c);
+  void parseMessage(cmd c);
   void read(void);
   void write(void);
+  void set(uint8_t cmd, float f);
 
   static uint8_t groupCounter;
   uint8_t groupNo;

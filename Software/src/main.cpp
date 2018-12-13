@@ -325,7 +325,7 @@ void setup() {
   pidPos.setParameters(1,0,1.2,20);
   pidSpeed.setParameters(6,5,0,20);
 
-
+  pidParList.read();
 
   // Run wirless related tasks on core 0
   xTaskCreatePinnedToCore(
@@ -750,19 +750,6 @@ void setMicroStep(uint8_t uStep) {
   digitalWrite(motUStepPin3, uStepPow&0x04);
 }
 
-void hexdump(const void *mem, uint32_t len, uint8_t cols = 16) {
-	const uint8_t* src = (const uint8_t*) mem;
-	Serial.printf("\n[HEXDUMP] Address: 0x%08X len: 0x%X (%d)", (ptrdiff_t)src, len, len);
-	for(uint32_t i = 0; i < len; i++) {
-		if(i % cols == 0) {
-			Serial.printf("\n[0x%08X] 0x%08X: ", (ptrdiff_t)src, i);
-		}
-		Serial.printf("%02X ", *src);
-		src++;
-	}
-	Serial.printf("\n");
-}
-
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
 
     switch(type) {
@@ -841,25 +828,28 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             // webSocket.broadcastTXT("message here");
             break;
         case WStype_BIN: {
-            Serial.printf("[%u] get binary length: %u\n", num, length);
-            hexdump(payload, length);
+            // Serial.printf("[%u] get binary length: %u\n", num, length);
 
             if (length==6) {
               cmd c;
               memcpy(c.arr, payload, 6);
-              Serial << c.cmd1 << "\t" << c.cmd2 << "\t" << c.val << "\t" << sizeof(cmd) << endl;
+              Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
 
-              // if (c.cmd1<parList::groupNo) {
-                if (c.cmd2==253) {
+              if (c.grp<parList::groupCounter) {
+                if (c.grp==0 && c.cmd<100) {
+                  pidParList.set(c.cmd,c.val);
+                  // pidPar[c.cmd].setFloat(c.val);
+                }
+                if (c.cmd==253) {
                   pidParList.sendList(&wsServer);
                 }
-                if (c.cmd2==254) {
+                if (c.cmd==254) {
                   pidParList.read();
                 }
-                if (c.cmd2==255) {
+                if (c.cmd==255) {
                   pidParList.write();
                 }
-              // }
+              }
             }
 
             break;
