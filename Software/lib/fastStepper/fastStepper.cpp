@@ -26,7 +26,7 @@ void fastStepper::init() {
   timerAttachInterrupt(_timer,timerFun, true);
 }
 
-void fastStepper::timerFunction() {
+void IRAM_ATTR fastStepper::timerFunction() {
   // portENTER_CRITICAL_ISR(&timerMux);
   if (!pinState) {
     _step += dir; // Step is made on rising edge
