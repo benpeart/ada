@@ -126,7 +126,7 @@ float gyroGain = 1.1;
 #define motorCurrentPin 25
 #define battVoltagePin 34
 
-float steerFilterConstant = 0.7;
+float steerFilterConstant = 0.9;
 float speedFilterConstant = 0.9;
 
 // -- WiFi
@@ -341,7 +341,7 @@ void setup() {
 
 }
 
-
+float steerInput, speedInput;
 
 void loop() {
   static unsigned long tLast = 0;
@@ -367,9 +367,12 @@ void loop() {
     readSensor();
     if (enableControl) {
       // Read receiver inputs
-      if (IBus.readChannel(0)>0) { // Check if receiver is active
-        avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*(((float) IBus.readChannel(1)-1500)/50.0);
-        avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*(((float) IBus.readChannel(0)-1500)/4.0);
+      if (IBus.isActive()) { // Check if receiver is active
+        speedInput = ((float) IBus.readChannel(1)-1500)/5.0; // Normalise between -100 and 100
+        steerInput = ((float) IBus.readChannel(0)-1500)/5.0;
+      }
+        avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
+        avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
         // uint8_t lastControlMode = controlMode;
         // controlMode = (2000-IBus.readChannel(5))/450;
 
@@ -381,23 +384,24 @@ void loop() {
             controlMode = 2;
             motLeft.setStep(0);
             motRight.setStep(0);
-            pidSpeed.resetDTerm();
+            pidSpeed.reset();
           }
         }
 
-        if (abs(avgSteer)>1) {
-          steer = avgSteer * (1 - abs(avgSpeed)/150.0);
-        } else {
-          steer = 0;
-        }
+        steer = avgSteer;
+        // if (abs(avgSteer)>1) {
+        //   steer = avgSteer * (1 - abs(avgSpeed)/150.0);
+        // } else {
+        //   steer = 0;
+        // }
 
-      }
+      // }
 
       if (tNowMs-lastInputTime>2000 && controlMode == 2) {
         controlMode = 1;
         motLeft.setStep(0);
         motRight.setStep(0);
-        pidPos.resetDTerm();
+        pidPos.reset();
       }
 
       if (controlMode == 0) {
@@ -507,6 +511,8 @@ void loop() {
     //   Serial << IBus.readChannel(i) << "\t";
     // }
     // Serial << endl;
+
+    Serial << speedInput << "\t" << steerInput << endl;
 
     // Serial << microStep << "\t" << absSpeed << "\t" << endl;
 
@@ -848,6 +854,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 }
                 if (c.cmd==255) {
                   pidParList.write();
+                }
+              } else if (c.grp==100) {
+                if (c.cmd==0) {
+                  speedInput = c.val;
+                } else if (c.cmd==1) {
+                  steerInput = c.val;
                 }
               }
             }
