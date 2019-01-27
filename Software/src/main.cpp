@@ -22,7 +22,6 @@ Also, you have to publish all modifications.
 #include <ArduinoOTA.h>
 #include <Streaming.h>
 #include <MPU6050.h>
-#include <EEPROM.h>
 #include <PID.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -32,6 +31,7 @@ Also, you have to publish all modifications.
 #include <SPIFFSEditor.h>
 #include <fastStepper.h>
 #include <par.h>
+#include <Preferences.h>  // for storing settings
 
 // ----- Type definitions
 typedef union {
@@ -72,13 +72,7 @@ AsyncWebServer httpServer(80);
 WebSocketsServer wsServer = WebSocketsServer(81);
 
 // -- EEPROM
-#define EEPROM_SIZE 1024
-#define EEPROM_ADR_INIT 0
-#define EEPROM_ADR_GYRO_OFFSET 50
-#define EEPROM_ADR_ANGLE_OFFSET 60
-#define EEPROM_ADR_WIFI_SSID 70
-#define EEPROM_ADR_WIFI_KEY 100
-#define EEPROM_ADR_WIFI_MODE 69
+Preferences preferences;
 
 // -- Stepper motors
 #define motEnablePin 27
@@ -175,7 +169,8 @@ void setup() {
 
   Serial.begin(115200);
   IBus.begin(Serial2);
-  EEPROM.begin(EEPROM_SIZE);
+  preferences.begin("settings", false);  // false = RW-mode
+  // preferences.clear();  // Remove all preferences under the opened namespace
 
   pinMode(motEnablePin, OUTPUT);
   pinMode(motUStepPin1, OUTPUT);
@@ -209,36 +204,38 @@ void setup() {
   delay(50);
 
   // Init EEPROM, if not done before
-  if (EEPROM.read(EEPROM_ADR_INIT) != 123) {
-    EEPROM.write(EEPROM_ADR_INIT, 123);
-    for (uint16_t i=1; i<EEPROM_SIZE; i++) {
-      EEPROM.write(i, 0);
-    }
-    Serial.println("EEPROM init complete");
+  #define PREF_VERSION 1  // if setting structure has been changed, count this number up to delete all settings
+  if (preferences.getUInt("pref_version", 0) != PREF_VERSION) {
+    preferences.clear();  // Remove all preferences under the opened namespace
+    preferences.putUInt("pref_version", PREF_VERSION);
+    Serial << "EEPROM init complete, all preferences deleted, new pref_version: " << PREF_VERSION << "\n";
   }
 
   // Read gyro offsets
   Serial << "Gyro calibration values: ";
   for (uint8_t i=0; i<3; i++) {
-    gyroOffset[i] = EEPROM.readShort(EEPROM_ADR_GYRO_OFFSET + i*2);
+    char buf[16];
+    sprintf(buf, "gyro_offset_%u", i);
+    gyroOffset[i] = preferences.getShort(buf, 0);
     Serial << gyroOffset[i] << "\t";
   }
   Serial << endl;
 
   // Read angle offset
-  angleOffset = EEPROM.readFloat(EEPROM_ADR_ANGLE_OFFSET);
-
+  angleOffset = preferences.getFloat("angle_offset", 0.0);
+ 
   // Perform initial gyro measurements
   initSensor(50);
 
   // Connect to Wifi and setup OTA if known Wifi network cannot be found
   boolean wifiConnected = 0;
-  if (EEPROM.read(EEPROM_ADR_WIFI_MODE)==1) {
-    char ssid[30];
-    char key[30];
-    EEPROM.readString(EEPROM_ADR_WIFI_SSID, ssid, 30);
-    EEPROM.readString(EEPROM_ADR_WIFI_KEY, key, 30);
-    Serial << "Connecting to " << ssid << endl;
+  if (preferences.getUInt("wifi_mode", 0)==1) {
+    char ssid[63];
+    char key[63];
+    preferences.getBytes("wifi_ssid", ssid, 63);
+    preferences.getBytes("wifi_key", key, 63);
+    Serial << "Connecting to '" << ssid << "'" << endl;
+    // Serial << "Connecting to '" << ssid << "', '" << key << "'" << endl;
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, key);
     if (!(WiFi.waitForConnectResult() != WL_CONNECTED)) {
@@ -512,7 +509,7 @@ void loop() {
     // }
     // Serial << endl;
 
-    Serial << speedInput << "\t" << steerInput << endl;
+    // Serial << speedInput << "\t" << steerInput << endl;
 
     // Serial << microStep << "\t" << absSpeed << "\t" << endl;
 
@@ -616,13 +613,13 @@ void parseCommand(char* data, uint8_t length) {
         break;
       case 'k': {
         uint8_t cmd2 = atoi(data+1);
-        if (cmd2==1) {
+        if (cmd2==1) {  // calibrate gyro
           calculateGyroOffset(100);
-        } else if (cmd2==2) {
+        } else if (cmd2==2) {  // calibrate acc
           Serial << "Updating angle offset from " << angleOffset;
           angleOffset = filterAngle;
           Serial << " to " << angleOffset << endl;
-          EEPROM.writeFloat(EEPROM_ADR_ANGLE_OFFSET, angleOffset);
+          preferences.putFloat("angle_offset", angleOffset);
         }
         break;}
       case 'l':
@@ -633,37 +630,33 @@ void parseCommand(char* data, uint8_t length) {
         break;
       case 'w': {
         char cmd2 = data[1];
-        char buf[30];
+        char buf[63];
         uint8_t len;
 
         switch (cmd2) {
           case 'r':
-            // Serial.println("Rebooting...");
-            // ESP.restart();
-            pidParList.sendList(&wsServer);
+            Serial.println("Rebooting...");
+            ESP.restart();
+            // pidParList.sendList(&wsServer);
             break;
           case 'l': // Send wifi networks to WS client
             sendWifiList();
             break;
           case 's': // Update WiFi SSID
             len = length-3;
-            // EEPROM.write(EEPROM_ADR_WIFI_SSID, len);
             memcpy(buf, &data[2], len);
             buf[len] = 0;
-            EEPROM.writeString(EEPROM_ADR_WIFI_SSID, buf);
-            EEPROM.commit();
+            preferences.putBytes("wifi_ssid", buf, 63);
             break;
           case 'k': // Update WiFi key
             len = length-3;
             memcpy(buf, &data[2], len);
             buf[len] = 0;
-            EEPROM.writeString(EEPROM_ADR_WIFI_KEY, buf);
-            EEPROM.commit();
+            preferences.putBytes("wifi_key", buf, 63);
             break;
           case 'm': // WiFi mode (0=AP, 1=use SSID)
             Serial.println(atoi(&data[2]));
-            EEPROM.write(EEPROM_ADR_WIFI_MODE, atoi(&data[2]));
-            EEPROM.commit();
+            preferences.putUInt("wifi_mode", atoi(&data[2]));
           }
         break;}
     }
@@ -709,11 +702,11 @@ void calculateGyroOffset(uint8_t nSample) {
   gyroOffset[1] = sumY/nSample;
   gyroOffset[2] = sumZ/nSample;
 
-
   for (uint8_t i=0; i<3; i++) {
-    EEPROM.writeShort(EEPROM_ADR_GYRO_OFFSET + i*2, gyroOffset[i]);
+    char buf[16];
+    sprintf(buf, "gyro_offset_%u", i);
+    preferences.putShort(buf, gyroOffset[i]);
   }
-  EEPROM.commit();
 
   Serial << "New gyro calibration values: " << gyroOffset[0] << "\t" << gyroOffset[1] << "\t" << gyroOffset[2] << endl;
 }
@@ -767,7 +760,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
 
         				// send message to client
-                char wBuf[40];
+                char wBuf[63];
+                char buf[63];
                 sprintf(wBuf, "c%dp%5.2f", 1, pidAngle.K);
                 wsServer.sendTXT(num, wBuf);
                 sprintf(wBuf, "c%di%5.2f", 1, pidAngle.Ti);
@@ -816,11 +810,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 wsServer.sendTXT(num, wBuf);
                 sprintf(wBuf, "l%5.0f", maxStepSpeed);
                 wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "wm%d", EEPROM.read(EEPROM_ADR_WIFI_MODE));
+                sprintf(wBuf, "wm%d", preferences.getUInt("wifi_mode", 0));  // 0=AP, 1=Client
                 wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "ws%s", EEPROM.readString(EEPROM_ADR_WIFI_SSID).c_str());
+                preferences.getBytes("wifi_ssid", buf, 63);
+                sprintf(wBuf, "ws%s", buf);
                 wsServer.sendTXT(num, wBuf);
-
             }
             break;
         case WStype_TEXT:
