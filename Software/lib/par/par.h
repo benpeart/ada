@@ -16,10 +16,10 @@
 // void readPIDParameters(PID* pid);
 // void writePIDParameters(PID* pid);
 
+typedef void (*funPointer) ();
 
-
-enum tag {t_u8,t_u16,t_u32,t_i8,t_i16,t_i32,t_f,t_d};
-const uint8_t tagSize[] = {1,2,4,1,2,4,4,8};
+enum tag {t_u8,t_u16,t_u32,t_i8,t_i16,t_i32,t_f,t_d,t_fun};
+const uint8_t tagSize[] = {1,2,4,1,2,4,4,8,0};
 
 typedef union {
   uint8_t arr[6];
@@ -51,6 +51,7 @@ public:
     int32_t * p_i32;
     float * p_f;
     double * p_d;
+    funPointer p_fun;
   };
 
   int address;
@@ -63,8 +64,9 @@ public:
 
   // par(uint8_t* _p, uint8_t _tag, uint8_t _cmd, int _address);
   // par(uint8_t* _p, uint8_t _tag);
-  par(uint8_t* _p);
+  par(uint8_t* _p); // Overload constructor for different variable types
   par(float* _p);
+  par(funPointer _p);
 
   void read(void);
   void write(void);

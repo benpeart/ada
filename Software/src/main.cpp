@@ -133,12 +133,29 @@ float speedFilterConstant = 0.9;
 const char host[] = "balancingrobot";
 
 // ----- Parameter definitions -----
+void updatePIDParameters() {
+  pidAngle.updateParameters();
+  pidSpeed.updateParameters();
+  pidPos.updateParameters();
+}
 par pidPar[] = {&pidAngle.K, &pidAngle.Ti, &pidAngle.Td, &pidAngle.N, &pidAngle.R, &pidAngle.minOutput, &pidAngle.maxOutput, &pidAngle.controllerType,
   &pidPos.K, &pidPos.Ti, &pidPos.Td, &pidPos.N, &pidPos.R, &pidPos.minOutput, &pidPos.maxOutput, &pidPos.controllerType,
-  &pidSpeed.K, &pidSpeed.Ti, &pidSpeed.Td, &pidSpeed.N, &pidSpeed.R, &pidSpeed.minOutput, &pidSpeed.maxOutput, &pidSpeed.controllerType};
+  &pidSpeed.K, &pidSpeed.Ti, &pidSpeed.Td, &pidSpeed.N, &pidSpeed.R, &pidSpeed.minOutput, &pidSpeed.maxOutput, &pidSpeed.controllerType, &updatePIDParameters};
 
-// Use default arguments for PID constructor
 parList pidParList(pidPar);
+
+// par motorPar[] = {&motorCurrent, &maxStepSpeed};
+// par wifiPar[] = {&wifiMode, &wifiSSID, &wifiKey};
+// par sensorPar[] = {&gyroOffset, &gyroGain, &angleOffset, &updateGyroOffset, &updateAngleOffset};
+// par controlPar[] = {&remoteType, &controlMode};
+
+// struct {
+//   struct {
+//     uint8_t mode;
+//     char ssid[30];
+//     char key[30];
+//   } wifi;
+// } settings;
 
 // ----- Interrupt functions -----
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -153,6 +170,7 @@ void IRAM_ATTR motRightTimerFunction() {
   motRight.timerFunction();
   portEXIT_CRITICAL_ISR(&timerMux);
 }
+
 
 void setMotorCurrent() {
   dacWrite(motorCurrentPin, motorCurrent);
@@ -258,30 +276,30 @@ void setup() {
     Serial.println(WiFi.softAPIP());
   }
 
-    ArduinoOTA.setHostname(host);
-    ArduinoOTA
-    .onStart([]() {
-      String type;
-      if (ArduinoOTA.getCommand() == U_FLASH)
-        type = "sketch";
-      else // U_SPIFFS
-        type = "filesystem";
-      Serial.println("Start updating " + type);
-    })
-    .onEnd([]() {
-      Serial.println("\nEnd");
-    })
-    .onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r\n", (progress / (total / 100)));
-    })
-    .onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
-    });
+  ArduinoOTA.setHostname(host);
+  ArduinoOTA
+  .onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else // U_SPIFFS
+      type = "filesystem";
+    Serial.println("Start updating " + type);
+  })
+  .onEnd([]() {
+    Serial.println("\nEnd");
+  })
+  .onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r\n", (progress / (total / 100)));
+  })
+  .onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
 
   ArduinoOTA.begin();
 
@@ -327,7 +345,7 @@ void setup() {
 
   pidParList.read();
 
-  // Run wirless related tasks on core 0
+  // Run wireless related tasks on core 0
   xTaskCreatePinnedToCore(
                     wirelessTask,   /* Function to implement the task */
                     "wirelessTask", /* Name of the task */
@@ -638,9 +656,9 @@ void parseCommand(char* data, uint8_t length) {
 
         switch (cmd2) {
           case 'r':
-            // Serial.println("Rebooting...");
-            // ESP.restart();
-            pidParList.sendList(&wsServer);
+            Serial.println("Rebooting...");
+            ESP.restart();
+            // pidParList.sendList(&wsServer);
             break;
           case 'l': // Send wifi networks to WS client
             sendWifiList();
@@ -844,6 +862,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               if (c.grp<parList::groupCounter) {
                 if (c.grp==0 && c.cmd<100) {
                   pidParList.set(c.cmd,c.val);
+
                   // pidPar[c.cmd].setFloat(c.val);
                 }
                 if (c.cmd==253) {

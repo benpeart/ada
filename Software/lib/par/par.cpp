@@ -38,7 +38,7 @@ Add a save command, to save all parameters (both start and end address are known
 
 
 
-int par::addressCounter = 300;
+int par::addressCounter = 300; // Starting address
 uint8_t par::cmdCounter = 0;
 uint8_t parList::groupCounter = 0;
 
@@ -83,9 +83,14 @@ void parList::read(void) {
 }
 
 void parList::set(uint8_t cmd, float f) {
-  l[cmd].setFloat(f);
+  if (l[cmd].tag == t_fun) {
+    l[cmd].p_fun();
+  } else {
+    l[cmd].setFloat(f);
+  }
 }
 
+// Parameter constructors for different variable types
 par::par(uint8_t* _p) {
   p_u8 = _p;
   tag = t_u8;
@@ -95,6 +100,12 @@ par::par(uint8_t* _p) {
 par::par(float* _p) {
   p_f = _p;
   tag = t_f;
+  assignAddress();
+}
+
+par::par(funPointer _p) {
+  p_fun = _p;
+  tag = t_fun;
   assignAddress();
 }
 
