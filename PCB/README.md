@@ -40,11 +40,33 @@ In the end, the PCB should look something like this
 ![Stepper driver improvements](/PCB/pictures/DSCN4937.JPG)
 
 ## Advanced
+Some optional improvements are listed here, which are not required for basic operation. 
+
 You can de-solder the current adjustment potentiometer on the stepper driver breakout boards. Add a wire to the wiper terminal, and connect the (two) wires to J4. Current can then be adjusted via the web interface. Or, get creative, and implement some current saving functionality.
 
 For better performance, you can tie the decay mode pin of the DRV8825 to VCC, setting it in fast mode. The DRV8825 sometimes skips steps in slow/mixed decay mode. Below picture illustrates both improvements.
 
 ![Stepper driver improvements](/PCB/pictures/DSCN4931.JPG)
+
+## Auxiliary header
+Connector J2 has a grid of 12 pins (3x4), with some general pins broken out, together with all unused ESP32 IO pins. See the close-up of the header below. Pin numbering in this picture is used in the table below to identify pins.
+
+![Auxiliary header pinout](/PCB/pictures/auxHeader.PNG)
+
+| Pin # | Name    | ESP32 pin |
+|-------|---------|-----------|
+| 1     | 5V      | Vin       |
+| 2     | IMU_SCL | D22       |
+| 3     | IMU_SDA | D21       |
+| 4     | GND     | GND       |
+| 5     | AUX1    | D32       |
+| 6     | AUX2    | D33       |
+| 7     | GND     | GND       |
+| 8     | AUX3    | D35       |
+| 9     | AUX4    | D26       |
+| 10    | VCC     | 3V3       |
+| 11    | AUX5    | D39       |
+| 12    | AUX6    | D36       |
 
 # BOM
 Applicable for v1.1. v1.0 doesn't have R7.
