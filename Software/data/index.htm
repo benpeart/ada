@@ -157,7 +157,7 @@
 			Gyro gain (not saved to EEPROM): <input id="j" type="range" min="0.5" max="1.5" step="0.01" oninput=sendData(this);><input type="text" id="j_value" readonly value="" style="width:40px"><br />
 			Gyro filter constant (not saved to EEPROM): <input id="n" type="range" min="0.9" max="1" step="0.001" oninput=sendData(this);><input type="text" id="n_value" readonly value="" style="width:40px"><br /><br />
 			Calibration<br />
-			<button type="button" onclick="sendCommand('k', 1)">Calibrate Gyro and save to EEPROM</button> (Put the robot without any movement to the ground and press the button. It is very buggy, if it is going crazy than power cycle and ignore this button.)<br />
+			<button type="button" onclick="sendCommand('k', 1)">Calibrate Gyro and save to EEPROM</button> (Put the robot without any movement to the ground and press the button.<br />
 			<button type="button" onclick="sendCommand('k', 2)">Calibrate ACC (Angle) and save to EEPROM</button> (Put the robot upright on its wheels and push the button ~10 times. For first calibration hold it by hand. When it is self balancing, repeat the calibration a few times without holding it.)<br />
 		</fieldset><br />
 		<fieldset>

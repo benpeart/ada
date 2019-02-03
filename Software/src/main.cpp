@@ -30,7 +30,7 @@ Also, you have to publish all modifications.
 #include <SPIFFS.h>
 #include <SPIFFSEditor.h>
 #include <fastStepper.h>
-#include <par.h>
+// #include <par.h>
 #include <Preferences.h>  // for storing settings
 
 // ----- Type definitions
@@ -127,16 +127,16 @@ float speedFilterConstant = 0.9;
 const char host[] = "balancingrobot";
 
 // ----- Parameter definitions -----
-void updatePIDParameters() {
-  pidAngle.updateParameters();
-  pidSpeed.updateParameters();
-  pidPos.updateParameters();
-}
-par pidPar[] = {&pidAngle.K, &pidAngle.Ti, &pidAngle.Td, &pidAngle.N, &pidAngle.R, &pidAngle.minOutput, &pidAngle.maxOutput, &pidAngle.controllerType,
-  &pidPos.K, &pidPos.Ti, &pidPos.Td, &pidPos.N, &pidPos.R, &pidPos.minOutput, &pidPos.maxOutput, &pidPos.controllerType,
-  &pidSpeed.K, &pidSpeed.Ti, &pidSpeed.Td, &pidSpeed.N, &pidSpeed.R, &pidSpeed.minOutput, &pidSpeed.maxOutput, &pidSpeed.controllerType, &updatePIDParameters};
-
-parList pidParList(pidPar);
+// void updatePIDParameters() {
+//   pidAngle.updateParameters();
+//   pidSpeed.updateParameters();
+//   pidPos.updateParameters();
+// }
+// par pidPar[] = {&pidAngle.K, &pidAngle.Ti, &pidAngle.Td, &pidAngle.N, &pidAngle.R, &pidAngle.minOutput, &pidAngle.maxOutput, &pidAngle.controllerType,
+//   &pidPos.K, &pidPos.Ti, &pidPos.Td, &pidPos.N, &pidPos.R, &pidPos.minOutput, &pidPos.maxOutput, &pidPos.controllerType,
+//   &pidSpeed.K, &pidSpeed.Ti, &pidSpeed.Td, &pidSpeed.N, &pidSpeed.R, &pidSpeed.minOutput, &pidSpeed.maxOutput, &pidSpeed.controllerType, &updatePIDParameters};
+//
+// parList pidParList(pidPar);
 
 // par motorPar[] = {&motorCurrent, &maxStepSpeed};
 // par wifiPar[] = {&wifiMode, &wifiSSID, &wifiKey};
@@ -175,10 +175,11 @@ void sendData(uint8_t *b, uint8_t l) {
 }
 
 void wirelessTask(void * parameters) {
+
   while (1) {
     IBus.loop();
     wsServer.loop();
-    delay(1);
+    delay(2);
   }
 }
 
@@ -241,7 +242,7 @@ void setup() {
 
   // Read angle offset
   angleOffset = preferences.getFloat("angle_offset", 0.0);
- 
+
   // Perform initial gyro measurements
   initSensor(50);
 
@@ -340,17 +341,17 @@ void setup() {
   pidPos.setParameters(1,0,1.2,20);
   pidSpeed.setParameters(6,5,0,20);
 
-  pidParList.read();
+  // pidParList.read();
 
   // Run wireless related tasks on core 0
-  xTaskCreatePinnedToCore(
-                    wirelessTask,   /* Function to implement the task */
-                    "wirelessTask", /* Name of the task */
-                    10000,      /* Stack size in words */
-                    NULL,       /* Task input parameter */
-                    1,          /* Priority of the task */
-                    NULL,       /* Task handle. */
-                    0);  /* Core where the task should run */
+  // xTaskCreatePinnedToCore(
+  //                   wirelessTask,   /* Function to implement the task */
+  //                   "wirelessTask", /* Name of the task */
+  //                   10000,      /* Stack size in words */
+  //                   NULL,       /* Task input parameter */
+  //                   0,          /* Priority of the task */
+  //                   NULL,       /* Task handle. */
+  //                   0);  /* Core where the task should run */
 
   Serial.println("Ready");
 
@@ -533,11 +534,18 @@ void loop() {
 
     parseSerial();
 
+    // Serial << micros()-tNow << "\t";
+
     tLast = tNow;
+
+      // Run other tasks
+    ArduinoOTA.handle();
+    IBus.loop();
+    wsServer.loop();
+
+    // Serial << micros()-tNow << endl;
   }
 
-  // Run other tasks
-  ArduinoOTA.handle();
   // delay(1);
 }
 
@@ -713,7 +721,7 @@ void calculateGyroOffset(uint8_t nSample) {
     sumX += x;
     sumY += y;
     sumZ += z;
-    delay(1);
+    delay(5);
   }
 
   gyroOffset[0] = sumX/nSample;
@@ -848,34 +856,34 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         case WStype_BIN: {
             // Serial.printf("[%u] get binary length: %u\n", num, length);
 
-            if (length==6) {
-              cmd c;
-              memcpy(c.arr, payload, 6);
-              Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
-
-              if (c.grp<parList::groupCounter) {
-                if (c.grp==0 && c.cmd<100) {
-                  pidParList.set(c.cmd,c.val);
-
-                  // pidPar[c.cmd].setFloat(c.val);
-                }
-                if (c.cmd==253) {
-                  pidParList.sendList(&wsServer);
-                }
-                if (c.cmd==254) {
-                  pidParList.read();
-                }
-                if (c.cmd==255) {
-                  pidParList.write();
-                }
-              } else if (c.grp==100) {
-                if (c.cmd==0) {
-                  speedInput = c.val;
-                } else if (c.cmd==1) {
-                  steerInput = c.val;
-                }
-              }
-            }
+            // if (length==6) {
+            //   cmd c;
+            //   memcpy(c.arr, payload, 6);
+            //   Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
+            //
+            //   if (c.grp<parList::groupCounter) {
+            //     if (c.grp==0 && c.cmd<100) {
+            //       pidParList.set(c.cmd,c.val);
+            //
+            //       // pidPar[c.cmd].setFloat(c.val);
+            //     }
+            //     if (c.cmd==253) {
+            //       pidParList.sendList(&wsServer);
+            //     }
+            //     if (c.cmd==254) {
+            //       pidParList.read();
+            //     }
+            //     if (c.cmd==255) {
+            //       pidParList.write();
+            //     }
+            //   } else if (c.grp==100) {
+            //     if (c.cmd==0) {
+            //       speedInput = c.val;
+            //     } else if (c.cmd==1) {
+            //       steerInput = c.val;
+            //     }
+            //   }
+            // }
 
             break;
           }
