@@ -5,10 +5,14 @@
 </head>
 
 <body>
-<canvas id="chartContainer" height=300"px" width=800p" style="border:1px solid #d3d3d3;"></canvas><br />
-<button name="plotStart" onclick="plotStartStop(1)" style="width:80px">Start</button>
-<button name="plotSTop" onclick="plotStartStop(0)" style="width:80px">Stop</button><br /><br />
+<canvas id="chartContainer" height="300px" width="800px" style="border:1px solid #d3d3d3;"></canvas><br />
 
+<button name="plotStart" onclick="plotStartStop(1)" style="width:80px">Start</button>
+<button name="plotStop" onclick="plotStartStop(0)" style="width:80px">Stop</button>
+<button name="plotClear" style="width:80px">Clear</button><br /><br />
+
+<fieldset style="width:300px">
+  <legend>Plot control</legend>
 Sample rate [Hz]:<br />
 <input id="plotRate" type="radio" name="sampleRate" value="8">25
 <input id="plotRate" type="radio" name="sampleRate" value="4" checked>50
@@ -29,6 +33,23 @@ Signals to plot<br />
 <input type="checkbox" name="plotOption" id="PID3output"    onchange=plotOption(this);>PID speed output<br />
 <input type="checkbox" name="plotOption" id="motLeftSpeed"  onchange=plotOption(this);>Left motor speed<br />
 <input type="checkbox" name="plotOption" id="motRightSpeed" onchange=plotOption(this);>Right motor speed<br />
+</fieldset>
+
+<fieldset style="width:300px">
+  <legend>Logging</legend>
+  <input type="checkbox" id="logEnable">Enable logging<br /><br />
+  Time elapsed [s]: <label id="logDuration">0</label><br /><br />
+  <button id="logClear" onclick="clearLogData()">Clear</button>
+  <button id="logExport" onclick="exportLogData()">Export</button>
+</fieldset>
+
+<fieldset style="width:300px">
+  <legend>Signal generation</legend>
+  Amplitude
+  On / off
+  Location
+</fieldset>
+
 </body>
 
 <script>
@@ -38,9 +59,11 @@ var ctx = canvas.getContext('2d');
 
 
 var nSample = 500;
-var nSignal = 11;
+var nSignal = 12;
 var yLim = [-100, 100];
 var col = ["blue","red","green"];
+
+var sampleRate = 0;
 
 var plotEnabled = new Array();
 
@@ -49,11 +72,14 @@ var data = new Array(nSignal);
 for (var i=0; i<nSignal; i++) data[i] = new Array(nSample);
 for (var i=0; i<nSignal; i++) data[i].fill(0,0,nSample);
 
+var logData = new Array(nSignal);
+for (var i=0; i<nSignal; i++) logData[i] = new Array;
+
+
 var updateChart = function() {
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 	for (var i=0; i<plotEnabled.length; i++) {
-	  var signalNo = plotEnabled[i];
-  <!--for (var i=0; i<nSignal; i++) {-->
+	  var signalNo = plotEnabled[i] + 1;
     ctx.beginPath();
     for (var j=0; j<nSample; j++) {
       var x = j * canvas.clientWidth/nSample;
@@ -70,42 +96,83 @@ var updateChart = function() {
   }
 }
 
+var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']);
+connection.binaryType = 'arraybuffer';
+connection.onopen = function () {  
+}; 
 
-
-console.time('updateChart');
-updateChart();
-console.timeEnd('updateChart');
-
-	var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']);
-	connection.binaryType = 'arraybuffer';
-	connection.onopen = function () {  
-		<!-- connection.send('Connect ' + new Date());  -->
-	}; 
-	connection.onerror = function (error) {    
-		console.log('WebSocket Error ', error);
-	};
-		connection.onmessage = function (e) {  
-	  if (typeof(e.data)=='string') { // Text frame
-	  } else { // Binary
-	    var d = e.data;
-	    var dv = new DataView(d);
-	    var text = '';
-	    for (var i=0; i<dv.byteLength; i++) {
-	       text += dv.getUint8(i) + ' ';
-	    }
-	    cmd = dv.getUint8(0);
-	    t = dv.getUint32(4,true)/1000000;
-	    for (var i=0; i<nSignal; i++) {
-	      var val = dv.getFloat32(8+i*4, true);
-	      data[i].push(val);
-	      data[i].shift();
-	      }
+connection.onerror = function (error) {    
+	console.log('WebSocket Error ', error);
+};
+	
+connection.onmessage = function (e) {  
+  if (typeof(e.data)=='string') { // Text frame
+  } else { // Binary
+    var d = e.data;
+    var dv = new DataView(d);
+    
+    cmd = dv.getUint8(0);
+    if (cmd==255) {
+      for (var i=0; i<nSignal; i++) {
+        var val = dv.getFloat32(4+i*4, true);
+        data[i].push(val);
+        data[i].shift();
+        
+        
+        if (document.getElementById('logEnable').checked) {
+          logData[i].push(val);
+          document.getElementById('logDuration').innerHTML = Number(logData[0].length/sampleRate).toFixed(2);
+        }
+      }
       updateChart();
-	    <!--console.log(val);-->
-	    <!--console.log(text);-->
-	   // console.log(dv.getFloat32(0),false);
-	  }
-	};
+    }
+  }
+};
+
+var exportLogData = function() {
+  var l = logData[0].length;
+  
+  if (l>0) {
+    var csvFile = '';
+    for (var i=0; i<l; i++) {
+      for (var j=0; j<nSignal; j++) {
+    // logData.forEach(function(x) {
+      // console.log(x.length)
+      var x = logData[j];
+        var val = x[i];
+        // csvFile += val.toString() + ',';
+        csvFile += Number(logData[j][i]).toFixed(6);
+        if (j<nSignal-1) csvFile += ',';
+      }
+      csvFile += '\n';
+    }
+    // console.log(logData[0][0].toFixed(5))
+    
+    var filename = 'logData.csv';
+    var blob = new Blob([csvFile], { type: 'text/csv;charset=utf-8;' });
+    if (navigator.msSaveBlob) { // IE 10+
+        navigator.msSaveBlob(blob, filename);
+    } else {
+      var link = document.createElement("a");
+      if (link.download !== undefined) { // feature detection
+        // Browsers that support HTML5 download attribute
+        var url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    }
+  }
+}
+
+var clearLogData = function() {
+  for (var i=0; i<nSignal; i++) logData[i] = [];
+  document.getElementById('logDuration').innerHTML = '0';
+  
+}
 
 var plotStartStop = function (x) {
   var radioButtons = document.getElementsByName("sampleRate");
@@ -114,10 +181,30 @@ var plotStartStop = function (x) {
     if (radioButtons[i].checked) break;
     prescaler /= 2;
   }
+  
   sendCommand('h', x);
   sendCommand('i', prescaler);
+  
+  // Toggle user input disable/enable
+  var b = x==1;
+  
+  e = document.getElementsByName("sampleRate");
+  for (var i=0; i<e.length; i++) {
+    e[i].disabled = b;
+  }
+  
+  document.getElementById("logEnable").disabled = b;
+  document.getElementById("logClear").disabled = b;
+  document.getElementById("logExport").disabled = b;
+  
+  sampleRate = 200/prescaler;
+  
+  plotOption(); 
+  
+  // If logging enabled, init array for data. 
 }
 
+// Find which signals are to be plotted
 var plotOption = function(e) {
   var plotOptions = document.getElementsByName("plotOption");
   var plotOptionLength = plotOptions.length;
@@ -127,12 +214,8 @@ var plotOption = function(e) {
   for (var i=0; i<plotOptionLength; i++) {
     if (plotOptions[i].checked) {
       plotEnabled[plotCount++] = i;
-      }
+    }
   }
-  <!--console.log(plotEnabled.length);-->
-  <!--for (var i=0; i<plotEnabled.length; i++) {-->
-    <!--console.log(plotEnabled[i]);-->
-  <!--}-->
 }
 
 function sendCommand(cmd, val) {

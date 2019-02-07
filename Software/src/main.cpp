@@ -500,24 +500,23 @@ void loop() {
             uint8_t fill1;
             uint8_t fill2;
             uint8_t fill3;
-            uint32_t time;
-            float f[11];
+            float f[12];
           };
           uint8_t b[52];
         } plotData;
 
-        plotData.time = micros();
-        plotData.f[0] = accAngle;
-        plotData.f[1] = filterAngle;
-        plotData.f[2] = pidAngle.setpoint;
-        plotData.f[3] = pidAngle.input;
-        plotData.f[4] = pidAngleOutput;
-        plotData.f[5] = pidPos.setpoint;
-        plotData.f[6] = pidPos.input;
-        plotData.f[7] = pidPosOutput;
-        plotData.f[8] = pidSpeed.setpoint;
-        plotData.f[9] = pidSpeed.input;
-        plotData.f[10] = pidSpeedOutput;
+        plotData.f[0] = micros()/1000000.0;
+        plotData.f[1] = accAngle;
+        plotData.f[2] = filterAngle;
+        plotData.f[3] = pidAngle.setpoint;
+        plotData.f[4] = pidAngle.input;
+        plotData.f[5] = pidAngleOutput;
+        plotData.f[6] = pidPos.setpoint;
+        plotData.f[7] = pidPos.input;
+        plotData.f[8] = pidPosOutput;
+        plotData.f[9] = pidSpeed.setpoint;
+        plotData.f[10] = pidSpeed.input;
+        plotData.f[11] = pidSpeedOutput;
         wsServer.sendBIN(0, plotData.b, sizeof(plotData.b));
       }
     }
