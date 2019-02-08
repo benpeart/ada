@@ -126,6 +126,10 @@ float speedFilterConstant = 0.9;
 // -- WiFi
 const char host[] = "balancingrobot";
 
+// Noise source (for system identification)
+boolean noiseSourceEnable = 0;
+float noiseSourceAmplitude = 1;
+
 // ----- Parameter definitions -----
 // void updatePIDParameters() {
 //   pidAngle.updateParameters();
@@ -435,7 +439,14 @@ void loop() {
         pidAngle.setpoint = pidSpeedOutput;
       }
 
-      pidAngle.input = filterAngle;
+
+      // Optionally, add some noise to angle for system identification purposes
+      if (noiseSourceEnable) {
+        pidAngle.input = filterAngle + noiseSourceAmplitude*((random(1000)/1000.0)-0.5);
+      } else {
+        pidAngle.input = filterAngle;
+      }
+      
       pidAngleOutput = pidAngle.calculate();
 
       avgMotSpeedSum += pidAngleOutput/2;
@@ -627,12 +638,29 @@ void parseCommand(char* data, uint8_t length) {
       case 'g':
         gyroGain = atof(data+1);
         break;
-      case 'h':
-        plot.enable = atoi(data+1);
+      case 'p': {
+        switch (data[1]) {
+          case 'e':
+            plot.enable = atoi(data+2);
+            break;
+          case 'p':
+            plot.prescaler = atoi(data+2);
+            break;
+          case 'n': // Noise source enable
+            noiseSourceEnable = atoi(data+2);
+            break;
+          case 'a': // Noise source amplitude
+            noiseSourceAmplitude = atof(data+2);
+            break;
+        }
         break;
-      case 'i':
-        plot.prescaler = atoi(data+1);
-        break;
+      }
+      // case 'h':
+      //   plot.enable = atoi(data+1);
+      //   break;
+      // case 'i':
+      //   plot.prescaler = atoi(data+1);
+      //   break;
       case 'j':
         gyroGain = atof(data+1);
         break;

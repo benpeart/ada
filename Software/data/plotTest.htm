@@ -45,9 +45,10 @@ Signals to plot<br />
 
 <fieldset style="width:300px">
   <legend>Signal generation</legend>
-  Amplitude
-  On / off
-  Location
+  <button id="noiseOn" onclick="sendCommand('pn',1)">Start</button>
+  <button id="noiseOff" onclick="sendCommand('pn',0)">Stop</button><br />
+  <input id="noiseAmplitude" type="range" min="0.1" max="10" step="0.1" oninput="sendCommand('pa',this.value);document.getElementById('noiseAmplitude_value').value = this.value;">
+  <input type="text" id="noiseAmplitude_value" readonly value="" style="width:40px"><br />
 </fieldset>
 
 </body>
@@ -182,8 +183,8 @@ var plotStartStop = function (x) {
     prescaler /= 2;
   }
   
-  sendCommand('h', x);
-  sendCommand('i', prescaler);
+  sendCommand('pe', x);
+  sendCommand('pp', prescaler);
   
   // Toggle user input disable/enable
   var b = x==1;
