@@ -60,6 +60,7 @@ void readSensor();
 void initSensor(uint8_t n);
 void setMicroStep(uint8_t uStep);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
+void sendConfigurationData(uint8_t num);
 
 void IRAM_ATTR motLeftTimerFunction();
 void IRAM_ATTR motRightTimerFunction();
@@ -113,7 +114,7 @@ float accAngle = 0;
 float filterAngle = 0;
 float angleOffset = 2.0;
 float gyroFilterConstant = 0.996;
-float gyroGain = 1.1;
+float gyroGain = 1.0;
 
 // -- Others
 #define ledPin 2
@@ -446,7 +447,7 @@ void loop() {
       } else {
         pidAngle.input = filterAngle;
       }
-      
+
       pidAngleOutput = pidAngle.calculate();
 
       avgMotSpeedSum += pidAngleOutput/2;
@@ -811,74 +812,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         case WStype_CONNECTED: {
                 IPAddress ip = wsServer.remoteIP(num);
                 Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-
-        				// send message to client
-                char wBuf[63];
-                char buf[63];
-                sprintf(wBuf, "c%dp%5.2f", 1, pidAngle.K);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%di%5.2f", 1, pidAngle.Ti);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dd%5.2f", 1, pidAngle.Td);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dn%5.2f", 1, pidAngle.N);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dm%5.1f", 1, pidAngle.maxOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%do%5.1f", 1, -pidAngle.minOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dp%5.2f", 2, pidPos.K);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%di%5.2f", 2, pidPos.Ti);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dd%5.2f", 2, pidPos.Td);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dn%5.2f", 2, pidPos.N);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dm%5.1f", 2, pidPos.maxOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%do%5.1f", 2, -pidPos.minOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dp%5.2f", 3, pidSpeed.K);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%di%5.2f", 3, pidSpeed.Ti);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dd%5.2f", 3, pidSpeed.Td);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dn%5.2f", 3, pidSpeed.N);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dm%5.1f", 3, pidSpeed.maxOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%do%5.1f", 3, -pidSpeed.minOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "h%4.2f", speedFilterConstant);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "i%4.2f", steerFilterConstant);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "v%d", motorCurrent);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "j%4.2f", gyroGain);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "n%5.3f", gyroFilterConstant);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "l%5.0f", maxStepSpeed);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "wm%d", preferences.getUInt("wifi_mode", 0));  // 0=AP, 1=Client
-                wsServer.sendTXT(num, wBuf);
-                preferences.getBytes("wifi_ssid", buf, 63);
-                sprintf(wBuf, "ws%s", buf);
-                wsServer.sendTXT(num, wBuf);
+                sendConfigurationData(num);
             }
             break;
         case WStype_TEXT:
             Serial.printf("[%u] get Text: %s\n", num, payload);
             parseCommand((char*) payload, length);
-
-            // send message to client
-            // webSocket.sendTXT(num, "message here");
-
-            // send data to all connected clients
-            // webSocket.broadcastTXT("message here");
             break;
         case WStype_BIN: {
             // Serial.printf("[%u] get binary length: %u\n", num, length);
@@ -922,4 +861,63 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 			break;
     }
 
+}
+
+void sendConfigurationData(uint8_t num) {
+  // send message to client
+  char wBuf[63];
+  char buf[63];
+  sprintf(wBuf, "c%dp%.4f", 1, pidAngle.K);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%di%.4f", 1, pidAngle.Ti);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dd%.4f", 1, pidAngle.Td);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dn%.4f", 1, pidAngle.N);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dm%.4f", 1, pidAngle.maxOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%do%.4f", 1, -pidAngle.minOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dp%.4f", 2, pidPos.K);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%di%.4f", 2, pidPos.Ti);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dd%.4f", 2, pidPos.Td);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dn%.4f", 2, pidPos.N);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dm%.4f", 2, pidPos.maxOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%do%.4f", 2, -pidPos.minOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dp%.4f", 3, pidSpeed.K);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%di%.4f", 3, pidSpeed.Ti);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dd%.4f", 3, pidSpeed.Td);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dn%.4f", 3, pidSpeed.N);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dm%.4f", 3, pidSpeed.maxOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%do%.4f", 3, -pidSpeed.minOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "h%.4f", speedFilterConstant);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "i%.4f", steerFilterConstant);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "v%d", motorCurrent);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "j%.4f", gyroGain);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "n%.4f", gyroFilterConstant);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "l%.4f", maxStepSpeed);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "wm%d", preferences.getUInt("wifi_mode", 0));  // 0=AP, 1=Client
+  wsServer.sendTXT(num, wBuf);
+  preferences.getBytes("wifi_ssid", buf, 63);
+  sprintf(wBuf, "ws%s", buf);
+  wsServer.sendTXT(num, wBuf);
 }
