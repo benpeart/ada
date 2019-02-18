@@ -380,6 +380,7 @@ void loop() {
   static uint32_t lastInputTime = 0;
   uint32_t tNowMs;
   float absSpeed = 0;
+  float noiseValue = 0;
 
   unsigned long tNow = micros();
   tNowMs = millis();
@@ -442,13 +443,18 @@ void loop() {
 
 
       // Optionally, add some noise to angle for system identification purposes
-      if (noiseSourceEnable) {
-        pidAngle.input = filterAngle + noiseSourceAmplitude*((random(1000)/1000.0)-0.5);
-      } else {
+      // if (noiseSourceEnable) {
+      //   pidAngle.input = filterAngle + noiseSourceAmplitude*((random(1000)/1000.0)-0.5);
+      // } else {
         pidAngle.input = filterAngle;
-      }
+      // }
 
       pidAngleOutput = pidAngle.calculate();
+
+      if (noiseSourceEnable) {
+        noiseValue = noiseSourceAmplitude*((random(1000)/1000.0)-0.5);
+        pidAngleOutput += noiseValue;
+      }
 
       avgMotSpeedSum += pidAngleOutput/2;
       if (avgMotSpeedSum>maxStepSpeed) {
@@ -512,9 +518,9 @@ void loop() {
             uint8_t fill1;
             uint8_t fill2;
             uint8_t fill3;
-            float f[12];
+            float f[13];
           };
-          uint8_t b[52];
+          uint8_t b[56];
         } plotData;
 
         plotData.f[0] = micros()/1000000.0;
@@ -529,6 +535,7 @@ void loop() {
         plotData.f[9] = pidSpeed.setpoint;
         plotData.f[10] = pidSpeed.input;
         plotData.f[11] = pidSpeedOutput;
+        plotData.f[12] = noiseValue;
         wsServer.sendBIN(0, plotData.b, sizeof(plotData.b));
       }
     }
@@ -875,6 +882,8 @@ void sendConfigurationData(uint8_t num) {
   wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "c%dn%.4f", 1, pidAngle.N);
   wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dr%.4f", 1, pidAngle.R);
+  wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "c%dm%.4f", 1, pidAngle.maxOutput);
   wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "c%do%.4f", 1, -pidAngle.minOutput);
@@ -887,6 +896,8 @@ void sendConfigurationData(uint8_t num) {
   wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "c%dn%.4f", 2, pidPos.N);
   wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dr%.4f", 2, pidPos.R);
+  wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "c%dm%.4f", 2, pidPos.maxOutput);
   wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "c%do%.4f", 2, -pidPos.minOutput);
@@ -898,6 +909,8 @@ void sendConfigurationData(uint8_t num) {
   sprintf(wBuf, "c%dd%.4f", 3, pidSpeed.Td);
   wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "c%dn%.4f", 3, pidSpeed.N);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dr%.4f", 3, pidSpeed.R);
   wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "c%dm%.4f", 3, pidSpeed.maxOutput);
   wsServer.sendTXT(num, wBuf);

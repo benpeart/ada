@@ -47,7 +47,7 @@ Signals to plot<br />
   <legend>Signal generation</legend>
   <button id="noiseOn" onclick="sendCommand('pn',1)">Start</button>
   <button id="noiseOff" onclick="sendCommand('pn',0)">Stop</button><br />
-  <input id="noiseAmplitude" type="range" min="0.1" max="10" step="0.1" oninput="sendCommand('pa',this.value);document.getElementById('noiseAmplitude_value').value = this.value;">
+  <input id="noiseAmplitude" type="range" min="0.1" max="20" step="0.1" oninput="sendCommand('pa',this.value);document.getElementById('noiseAmplitude_value').value = this.value;">
   <input type="text" id="noiseAmplitude_value" readonly value="" style="width:40px"><br />
 </fieldset>
 
@@ -76,6 +76,7 @@ for (var i=0; i<nSignal; i++) data[i].fill(0,0,nSample);
 var logData = new Array(nSignal);
 for (var i=0; i<nSignal; i++) logData[i] = new Array;
 
+var settingList = [];
 
 var updateChart = function() {
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -108,6 +109,7 @@ connection.onerror = function (error) {
 	
 connection.onmessage = function (e) {  
   if (typeof(e.data)=='string') { // Text frame
+    settingList.push(e.data);
   } else { // Binary
     var d = e.data;
     var dv = new DataView(d);
@@ -135,6 +137,12 @@ var exportLogData = function() {
   
   if (l>0) {
     var csvFile = '';
+    
+    // Add header with all settings
+    for (var i=0; i<settingList.length; i++) {
+      csvFile += settingList[i];
+      if (i<settingList.length) csvFile += ',';
+    }
     for (var i=0; i<l; i++) {
       for (var j=0; j<nSignal; j++) {
     // logData.forEach(function(x) {

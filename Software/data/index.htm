@@ -42,13 +42,13 @@
 		document.getElementById(e.id+'_value').value=e.value;  // update slider-value in textfield
 	}
 	function sendData(e) {
-		updateSliderText(e);
 	 // var id = event.target.id;
 	 // var val = parseFloat(document.getElementById(id).value).toString(10);
 	  var val = e.value;
 	  var val2 = e.id + val + 'x';
 	  console.log(val2);
 	  connection.send(val2);
+		updateSliderText(e);
 	}
 	function sendCommand(cmd, val) {
     var text = cmd + val + 'x';
@@ -115,6 +115,7 @@
 			I: <input id="c1i" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><input type="text" id="c1i_value" readonly value="" style="width:40px"><br />
 			D: <input id="c1d" type="range" min="0" max="0.3" step="0.001" oninput=sendData(this);><input type="text" id="c1d_value" readonly value="" style="width:40px"><br />
 			N: <input id="c1n" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c1n_value" readonly value="" style="width:40px"><br />
+			R: <input id="c1r" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><input type="text" id="c1r_value" readonly value="" style="width:40px"><br />
 			Max: <input id="c1m" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c1m_value" readonly value="" style="width:40px"><br />
 			Min: <input id="c1o" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c1o_value" readonly value="" style="width:40px"><br />
 			<input id="c1t" type="radio" name="cType" value="0" onchange=sendData(this);>P
@@ -123,10 +124,11 @@
 			<input id="c1t" type="radio" name="cType" value="3" onchange=sendData(this);>PID<br />
 			</td><td>
 			Pos:<br />
-			P: <input id="c2p" type="range" min="0.1" max="10" step="0.1" oninput=sendData(this);><input type="text" id="c2p_value" readonly value="" style="width:40px"><br />
+			P: <input id="c2p" type="range" min="0" max="10" step="0.1" oninput=sendData(this);><input type="text" id="c2p_value" readonly value="" style="width:40px"><br />
 			I: <input id="c2i" type="range" min="0" max="5" step="0.01" oninput=sendData(this);><input type="text" id="c2i_value" readonly value="" style="width:40px"><br />
 			D: <input id="c2d" type="range" min="0" max="3" step="0.01" oninput=sendData(this);><input type="text" id="c2d_value" readonly value="" style="width:40px"><br />
 			N: <input id="c2n" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c2n_value" readonly value="" style="width:40px"><br />
+			R: <input id="c2r" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><input type="text" id="c2r_value" readonly value="" style="width:40px"><br />
 			Max: <input id="c2m" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c2m_value" readonly value="" style="width:40px"><br />
 			Min: <input id="c2o" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c2o_value" readonly value="" style="width:40px"><br />
 			<input id="c2t" type="radio" name="cType" value="0" onchange=sendData(this);>P
@@ -139,6 +141,7 @@
 			I: <input id="c3i" type="range" min="0" max="5" step="0.01" oninput=sendData(this);><input type="text" id="c3i_value" readonly value="" style="width:40px"><br />
 			D: <input id="c3d" type="range" min="0" max="0.3" step="0.001" oninput=sendData(this);><input type="text" id="c3d_value" readonly value="" style="width:40px"><br />
 			N: <input id="c3n" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c3n_value" readonly value="" style="width:40px"><br />
+			R: <input id="c3r" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><input type="text" id="c3r_value" readonly value="" style="width:40px"><br />
 			Max: <input id="c3m" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c3m_value" readonly value="" style="width:40px"><br />
 			Min: <input id="c3o" type="range" min="0" max="50" step="0.1" oninput=sendData(this);><input type="text" id="c3o_value" readonly value="" style="width:40px"><br />
 			<input id="c3t" type="radio" name="cType" value="0" onchange=sendData(this);>P
