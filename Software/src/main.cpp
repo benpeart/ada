@@ -33,6 +33,24 @@ Also, you have to publish all modifications.
 // #include <par.h>
 #include <Preferences.h>  // for storing settings
 
+// ----- Input method
+
+// Driving behaviour
+float speedFactor = 0.5;  // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
+float steerFactor = 1.0;  // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
+float speedFilterConstant = 0.9;  // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+float steerFilterConstant = 0.9;  // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+
+// PPM (called CPPM, PPM-SUM) signal containing 8 RC-Channels in 1 PIN ("RX" on board)
+// Channel 1 = steer, Channel 2 = speed
+#define INPUT_PPM
+#define PPM_PIN 16  // GPIO-Number
+#define minPPM 990  // minimum PPM-Value (Stick down)
+#define maxPPM 2015  // maximum PPM-Value (Stick up)
+
+// FlySkyIBus signal containing 8 RC-Channels in 1 PIN ("RX" on board)
+// #define INPUT_IBUS
+
 // ----- Type definitions
 typedef union {
   struct {
@@ -86,7 +104,7 @@ fastStepper motRight(2, 15, 1, motRightTimerFunction);
 
 uint8_t microStep = 32;
 uint8_t motorCurrent = 150;
-float maxStepSpeed = 3000;
+float maxStepSpeed = 1500;
 
 // -- PID control
 #define dT_MICROSECONDS 5000
@@ -120,9 +138,6 @@ float gyroGain = 1.0;
 #define ledPin 2
 #define motorCurrentPin 25
 #define battVoltagePin 34
-
-float steerFilterConstant = 0.9;
-float speedFilterConstant = 0.9;
 
 // -- WiFi
 const char host[] = "balancingrobot";
@@ -180,19 +195,60 @@ void sendData(uint8_t *b, uint8_t l) {
 }
 
 void wirelessTask(void * parameters) {
-
   while (1) {
+    #ifdef INPUT_IBUS
     IBus.loop();
+    #endif
     wsServer.loop();
     delay(2);
   }
 }
 
+// -- PPM Input
+#ifdef INPUT_PPM
+volatile int interruptCounter = 0;
+int numberOfInterrupts = 0;
+
+// portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+
+//Array in which the channel values are stored
+volatile int32_t rxData[] = {0,0,0,0,0,0,0,0};
+//int in which the time difference to the last pulse is stored
+volatile uint32_t rxPre = 1;
+//int in which the current channel number to read out is stored
+volatile uint8_t channelNr = 0; 
+//indicates if the data in the channel value array are reliable e.g. there have been two sync breaks, so in the array there are only "real" values synced to the correspondinc channel number
+volatile uint8_t firstRoundCounter = 2;
+volatile boolean firstRoundPassed = false;
+volatile boolean validRxValues = false;
+
+void rxFalling() {  // will be called when the ppm peak is over
+  if(micros()-rxPre > 6000) {  // if the current peak is the first peak after the syncro break of 10ms
+    rxPre = micros();
+    channelNr = 0;  // reset the channel number to syncronize again
+    firstRoundCounter--;//the values in the first round are complete rubish, since there would'nt have been a first channel sync, this var indicates for the other functions, if the values are reliable
+    if(firstRoundCounter == 0) firstRoundPassed = true;
+  }
+  else {
+    rxData[channelNr] = micros()-rxPre;
+    rxPre = micros();
+    channelNr++;
+  } 
+  if(!validRxValues) {
+    if(firstRoundPassed) {
+        validRxValues = true;
+    }
+  }
+}
+#endif
+
 // ----- Main code
 void setup() {
 
   Serial.begin(115200);
+  #ifdef INPUT_IBUS
   IBus.begin(Serial2);
+  #endif
   preferences.begin("settings", false);  // false = RW-mode
   // preferences.clear();  // Remove all preferences under the opened namespace
 
@@ -348,6 +404,12 @@ void setup() {
 
   // pidParList.read();
 
+  // PPM
+  #ifdef INPUT_PPM
+  pinMode(PPM_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PPM_PIN), rxFalling, FALLING);
+  #endif
+
   // Run wireless related tasks on core 0
   // xTaskCreatePinnedToCore(
   //                   wirelessTask,   /* Function to implement the task */
@@ -363,6 +425,11 @@ void setup() {
 }
 
 float steerInput, speedInput;
+
+float mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
+{
+ return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 void loop() {
   static unsigned long tLast = 0;
@@ -389,33 +456,47 @@ void loop() {
     readSensor();
     if (enableControl) {
       // Read receiver inputs
+
+      #ifdef INPUT_IBUS
       if (IBus.isActive()) { // Check if receiver is active
-        speedInput = ((float) IBus.readChannel(1)-1500)/5.0; // Normalise between -100 and 100
-        steerInput = ((float) IBus.readChannel(0)-1500)/5.0;
+        speedInput = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
+        steerInput = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
       }
-        avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
-        avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
-        // uint8_t lastControlMode = controlMode;
-        // controlMode = (2000-IBus.readChannel(5))/450;
+      #endif
 
-        if (abs(avgSpeed)<0.2) {
-          // speedInput = 0;
-        } else {
-          lastInputTime = tNowMs;
-          if (controlMode==1) {
-            controlMode = 2;
-            motLeft.setStep(0);
-            motRight.setStep(0);
-            pidSpeed.reset();
-          }
+      #ifdef INPUT_PPM
+      if (rxData[1] == 0 || rxData[0] == 0) {  // no ppm signal (tx off || rx set to no signal in failsave || no reciever connected (use 100k pulldown))
+        speedInput = 0.0;
+        steerInput = 0.0;
+      } else {  // normal ppm signal
+        speedInput = mapfloat((float)constrain(rxData[1], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * speedFactor;  // Normalise between -100 and 100
+        steerInput = mapfloat((float)constrain(rxData[0], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * steerFactor;
+      }
+      #endif
+
+      avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
+      avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
+      // uint8_t lastControlMode = controlMode;
+      // controlMode = (2000-IBus.readChannel(5))/450;
+
+      if (abs(avgSpeed)<0.2) {
+        // speedInput = 0;
+      } else {
+        lastInputTime = tNowMs;
+        if (controlMode==1) {
+          controlMode = 2;
+          motLeft.setStep(0);
+          motRight.setStep(0);
+          pidSpeed.reset();
         }
+      }
 
-        steer = avgSteer;
-        // if (abs(avgSteer)>1) {
-        //   steer = avgSteer * (1 - abs(avgSpeed)/150.0);
-        // } else {
-        //   steer = 0;
-        // }
+      steer = avgSteer;
+      // if (abs(avgSteer)>1) {
+      //   steer = avgSteer * (1 - abs(avgSpeed)/150.0);
+      // } else {
+      //   steer = 0;
+      // }
 
       // }
 
@@ -558,7 +639,9 @@ void loop() {
 
       // Run other tasks
     ArduinoOTA.handle();
+    #ifdef INPUT_IBUS
     IBus.loop();
+    #endif
     wsServer.loop();
 
     // Serial << micros()-tNow << endl;
