@@ -7,13 +7,14 @@ syms L g r m1 m2
 T = [x;
     r;
     x+L*sin(phi); 
-     -L*cos(phi)]
+    r+L*cos(phi); 
+    x/r]
  
 q = [x;phi];
 qd = [xd;phid];
 
-M = diag([m1 m1 m2 m2]);
-fi = [0 0 0 -m2*g].'; % External forces
+M = diag([m1 m1 m2 m2 0]);
+fi = [0 -m1*g 0 -m2*g 0].'; % External forces
 
 
 Tjl = jacobian(T,q);                
@@ -47,12 +48,12 @@ simplify(inv(R)*xdds(3:4))
 
 %% Solve
 dtSim = 1e-2;
-TSim = 5;
+TSim = 3;
 % q0 = [pi/2;0]; 
 
-q0 = [0;pi]; 
-qd0 = [0;0.01];
-parVal = [1 9.81 0.2 1 1];
+q0 = [0;0]; 
+qd0 = [0;0.05];
+parVal = [0.3 9.81 0.1 1000 1];
 
 eom_fun = @(t,s) stated_fun(s.', parVal);
 [t,y] = ode45(eom_fun, [0:dtSim:TSim], [q0;qd0]);
@@ -64,36 +65,56 @@ legend('$\phi$', '$\dot{\phi}$', 'Interpreter', 'latex')
 grid on
 
 %% Animate
-
-qddVal = stated_fun2(y,parVal);
-xddVal = xdd_fun(y, qddVal(:,2:2:end), parVal);
-
-figure(2); clf;
-plot(t,qddVal)
-legend('$\dot{\phi}$','$\ddot{\phi}$', 'Interpreter', 'Latex')
-
-figure(3); clf
-plot(t,xddVal)
-legend('$\ddot{x}_1$','$\ddot{y}_1$', 'Interpreter', 'Latex')
+% 
+% qddVal = stated_fun2(y,parVal);
+% xddVal = xdd_fun(y, qddVal(:,2:2:end), parVal);
+% 
+% figure(2); clf;
+% plot(t,qddVal)
+% legend('$\dot{\phi}$','$\ddot{\phi}$', 'Interpreter', 'Latex')
+% 
+% figure(3); clf
+% plot(t,xddVal)
+% legend('$\ddot{x}_1$','$\ddot{y}_1$', 'Interpreter', 'Latex')
 
 %%
 dtAnim = 4*dtSim;
 figure(123); clf;
 
 xy = x_fun(y, parVal.*ones(length(t),1));
+xyPlot = xy(1,:);
 % I'd like to know XY coordinates of CoMs, makes drawing a lot easier. 
 % Draw line and circle, animate / update over time
-h1 = plot(xy(1,[1 3]), xy(1,[2 4]), '-o', 'LineWidth', 2, 'MarkerSize', 10);
+h1 = plot(xyPlot([1 3]), xyPlot([2 4]), '-o', 'LineWidth', 2, 'MarkerSize', 10);
+hold on
+rv = parVal(3);
+% Draw wheel with spokes
+% Spoke is line from center to radial position
 
-% xlim([-1 1])
+hWheel = rectangle('Position',[xyPlot(1)-rv xyPlot(2)-rv rv*2 rv*2],'Curvature',[1,1], 'LineWidth', 3);
+nSpoke = 3;
+spokeAngle = (0:nSpoke-1).'/nSpoke*2*pi;
+hSpoke = plot(xyPlot(1)+[zeros(nSpoke,1) cos(spokeAngle)*rv].', xyPlot(2)+[zeros(nSpoke,1) sin(spokeAngle)*rv].', 'LineWidth', 2);
+
+hold off
+
+
+xlim([-1 1])
 ylim([-1 1])
-axis equal
+% axis equal
+daspect([1 1 1])
 grid on
-
+%
 for k = 1:length(t)
-    h1.XData = xy(k,[1 3]);
-    h1.YData = xy(k,[2 4]);
+    xyPlot = xy(k,:);
+    h1.XData = xyPlot([1 3]);
+    h1.YData = xyPlot([2 4]);
+    hWheel.Position(1:2) = xyPlot([1 2])-rv;
+    set(hSpoke, {'XData'}, num2cell(xyPlot(1)+[zeros(nSpoke,1) cos(xyPlot(5)+spokeAngle)*rv],2),...
+        {'YData'}, num2cell(xyPlot(2)+[zeros(nSpoke,1) sin(xyPlot(5)+spokeAngle)*rv],2))
+%         'xyPlot(2)+[zeros(nSpoke,1) sin(spokeAngle)*rv].', 'LineWidth', 2);
     drawnow;
+    pause(0.01)
 end
 
 % Idea: place balancing robot in stable equilibrium so that I don't need
@@ -107,6 +128,10 @@ end
 % solving/plotting/animating (qdd_fun, x_fun, xdd_fun etc)
 % - Draw wheel
 % - Rotate wheel
+
+% Check sim correctness
+% - Energy (lagrange?)
+% - length of pendulum
 
 % - Record video! Good to have initial versions
 % -- Videowriter
