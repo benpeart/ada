@@ -11,7 +11,7 @@ To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/
 
 #include "PID.h"
 #include <Arduino.h>
-#include <streaming.h>
+#include <Streaming.h>
 
 PID::PID(void) {
 	_dT = 0.01;
