@@ -48,3 +48,9 @@ hostName.local/plotTest.htm
 To be merged into index.htm
 
 For this to work, first load plotTest.htm, then index.htm. This allows to view signals, while simultaneously adjusting parameters. 
+
+# Wifi control
+For a slider based web page to control your robot
+
+hostName.local/control.htm
+
