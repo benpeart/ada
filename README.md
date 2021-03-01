@@ -31,3 +31,6 @@ You'll need to manually adjust the current setting potentiometers on the stepper
 This is done with one stepper driver at a time, such that you can see the current consumption. I use a lab power supply, as it has a current meter built-in. You could also add a multimeter / current meter in series with a battery, for example. So, plug in only one stepper driver, and power on the robot. Never switch stepper drivers (nor the wires to the motors) when powered, magic smoke guaranteed!
 
 Now, use a small screwdriver to adjust the stepper motor current. The "correct" current depends on multiple factors, mostly battery voltage. The higher the voltage, the lower the current draw, as the driver works like a buck regulator. I usually aim for say 0.3 or 0.4A (for one stepper motor) at 12V. The other prominent limit for stepper current is heat: if the drivers get too warm, simply lower stepper current. 
+
+## Stepper recommendation
+Use NEMA17 steppers with a hight (without axis) of 50mm and 200 steps per rotation = 1.8 deg. The smaller ones does not work very well.
