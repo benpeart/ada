@@ -11,8 +11,8 @@ For Software Setup see [Software/README.md](Software/README.md)
 Please be aware that this code is very experimental / far from complete. So, you'll probably have to implement some stuff yourself. Also, use at your own risk.
 
 ### Branches
-- master: old and stable version
-- devel: new version with lots of new features (recommended)
+- master: stable version
+- devel: experimental features, use at your own risk
 
 # General instructions
 
