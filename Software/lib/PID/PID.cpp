@@ -147,17 +147,21 @@ void PID::resetDTerm()
 // Code obtained from http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=bu&passmode=lp&order=2&usesr=usesr&sr=1000&frequencyLow=100&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
 float PID::outputFilter(float x)
 {
-	// 100 Hz
-	// v[0] = v[1];
-	// v[1] = v[2];
+	// cut-off frequency at 10% of sampling frequency
+	v[0] = v[1];
+	v[1] = v[2];
 	// v[2] = (6.745527388907e-2 * x)
-		 // + ( -0.4128015981 * v[0])
-		 // + (  1.1429805025 * v[1]);
-	// return (v[0] + v[2]) + 2*v[1];
+	// 	 + ( -0.4128015981 * v[0])
+	// 	 + (  1.1429805025 * v[1]);
+	// 5%	
+	v[2] = (2.008336556421122521e-2 * x)
+			+ (-0.64135153805756306422 * v[0])
+			+ (1.56101807580071816339 * v[1]);
+	return (v[0] + v[2]) + 2*v[1];
 	// 10 Hz
-	v[2] = (9.446918438402e-4 * x)
-				 + ( -0.9149758348 * v[0])
-				 + (  1.9111970674 * v[1]);
-			return
-				 (v[0] + v[2]) +2* v[1];
+	// v[2] = (9.446918438402e-4 * x)
+	// 			 + ( -0.9149758348 * v[0])
+	// 			 + (  1.9111970674 * v[1]);
+	// 		return
+	// 			 (v[0] + v[2]) +2* v[1];
 }

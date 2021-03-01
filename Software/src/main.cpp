@@ -102,7 +102,7 @@ Preferences preferences;
 fastStepper motLeft(5, 4, 0, motLeftTimerFunction);
 fastStepper motRight(2, 15, 1, motRightTimerFunction);
 
-uint8_t microStep = 32;
+uint8_t microStep = 16;
 uint8_t motorCurrent = 150;
 float maxStepSpeed = 1500;
 
@@ -115,7 +115,7 @@ float maxStepSpeed = 1500;
 #define PID_SPEED 2
 
 #define PID_ANGLE_MAX 20
-PID pidAngle(cPD, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
+PID pidAngle(cPD|cLP, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
 #define PID_POS_MAX 35
 PID pidPos(cPD, dT, PID_POS_MAX, -PID_POS_MAX);
 PID pidSpeed(cP, dT, PID_POS_MAX, -PID_POS_MAX);
@@ -133,6 +133,9 @@ float filterAngle = 0;
 float angleOffset = 2.0;
 float gyroFilterConstant = 0.996;
 float gyroGain = 1.0;
+
+// Temporary values for debugging sensor algorithm
+float rxg, ayg, azg;
 
 // -- Others
 #define ledPin 2
@@ -398,7 +401,7 @@ void setup() {
 
   dacWrite(motorCurrentPin, motorCurrent);
 
-  pidAngle.setParameters(0.65,0,0.075,15);
+  pidAngle.setParameters(0.65,0.6,0.075,15);
   pidPos.setParameters(1,0,1.2,20);
   pidSpeed.setParameters(6,5,0,20);
 
@@ -448,12 +451,21 @@ void loop() {
   uint32_t tNowMs;
   float absSpeed = 0;
   float noiseValue = 0;
+  static boolean overrideMode = 0;
 
   unsigned long tNow = micros();
   tNowMs = millis();
 
   if (tNow-tLast > dT_MICROSECONDS) {
     readSensor();
+    // Read receiver inputs
+    if (IBus.isActive()) { // Check if receiver is active
+      speedInput = ((float) IBus.readChannel(1)-1500)/5.0; // Normalise between -100 and 100
+      steerInput = ((float) IBus.readChannel(0)-1500)/5.0;
+    }
+    avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
+    avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
+
     if (enableControl) {
       // Read receiver inputs
 
@@ -554,14 +566,14 @@ void loop() {
       if (absSpeed > (150 * 32 / microStep) && microStep > 1) microStep /= 2;
       if (absSpeed < (130 * 32 / microStep) && microStep < 32) microStep *= 2;
 
-      if (microStep!=lastMicroStep) {
-        motLeft.microStep = microStep;
-        motRight.microStep = microStep;
-        setMicroStep(microStep);
-      }
+      // if (microStep!=lastMicroStep) {
+      //   motLeft.microStep = microStep;
+      //   motRight.microStep = microStep;
+      //   setMicroStep(microStep);
+      // }
 
       // Disable control if robot is almost horizontal. Re-enable if upright.
-      if (abs(filterAngle)>70) {
+      if (abs(filterAngle)>70 && (IBus.readChannel(5)<1500 && IBus.readChannel(5)>800)) {
         enableControl = 0;
         motLeft.speed = 0;
         motRight.speed = 0;
@@ -577,9 +589,47 @@ void loop() {
         pidAngle.reset();
         pidPos.reset();
         pidSpeed.reset();
+        overrideMode = 0;
         digitalWrite(motEnablePin, 0); // Inverted action on enable pin
         // delay(1);
       }
+
+      // Self right
+      if (IBus.readChannel(5)>1600) {
+        enableControl = 1;
+        controlMode = 1;
+        avgMotSpeedSum = 0;
+        motLeft.setStep(0);
+        motRight.setStep(0);
+        pidAngle.reset();
+        pidPos.reset();
+        pidSpeed.reset();
+        overrideMode = 0;
+        digitalWrite(motEnablePin, 0); // Inverted action on enable pin
+
+      }
+
+      // Override control
+      if (IBus.readChannel(4)>1600 && !overrideMode && !enableControl) {
+        // Enable override mode
+        motLeft.speed = 0;
+        motRight.speed = 0;
+        digitalWrite(motEnablePin, 0); // Inverted action on enable pin
+        overrideMode = 1;
+      } else if (IBus.readChannel(4)<1500 && overrideMode) {
+        digitalWrite(motEnablePin, 1); // Inverted action on enable pin
+        overrideMode = 0;
+      }
+
+      if (overrideMode) {
+        float spd = avgSpeed;
+        float str = avgSteer;
+        // if (spd<3) spd = 0;
+        // if (str<3) str = 0;
+        motLeft.speed = -30*spd + 2*str;
+        motRight.speed = -30*spd - 2*str;
+      }
+      // Serial << motLeft.speed << "\t" << motRight.speed << "\t" << overrideMode << endl;
     }
 
     motLeft.update();
@@ -613,10 +663,14 @@ void loop() {
         plotData.f[6] = pidPos.setpoint;
         plotData.f[7] = pidPos.input;
         plotData.f[8] = pidPosOutput;
-        plotData.f[9] = pidSpeed.setpoint;
-        plotData.f[10] = pidSpeed.input;
-        plotData.f[11] = pidSpeedOutput;
-        plotData.f[12] = noiseValue;
+        // plotData.f[9] = pidSpeed.setpoint;
+        // plotData.f[10] = pidSpeed.input;
+        // plotData.f[11] = pidSpeedOutput;
+        // plotData.f[12] = noiseValue;?
+        plotData.f[9] = ayg;
+        plotData.f[10] = azg;
+        // plotData.f[11] = rxg;
+        plotData.f[11] = microStep;
         wsServer.sendBIN(0, plotData.b, sizeof(plotData.b));
       }
     }
@@ -869,6 +923,10 @@ void readSensor() {
   filterAngle = gyroFilterConstant * (filterAngle + deltaGyroAngle) + (1 - gyroFilterConstant) * (accAngle);
 
   // Serial << ay/1000.0 << "\t" << az/1000.0 << "\t" << accAngle << "\t" << filterAngle << endl;
+  ayg = (ay*9.81)/16384.0;
+  azg = (az*9.81)/16384.0;
+  rxg = ((float)((gx - gyroOffset[0])) / GYRO_SENSITIVITY);
+  // Serial << ayf << "\t"<< azf << "\t" << accAngle << endl;
 }
 
 void initSensor(uint8_t n) {
