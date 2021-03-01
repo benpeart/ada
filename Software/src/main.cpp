@@ -43,13 +43,13 @@ float steerFilterConstant = 0.9;  // how fast it reacts to inputs, higher = soft
 
 // PPM (called CPPM, PPM-SUM) signal containing 8 RC-Channels in 1 PIN ("RX" on board)
 // Channel 1 = steer, Channel 2 = speed
-#define INPUT_PPM
+// #define INPUT_PPM
 #define PPM_PIN 16  // GPIO-Number
 #define minPPM 990  // minimum PPM-Value (Stick down)
 #define maxPPM 2015  // maximum PPM-Value (Stick up)
 
 // FlySkyIBus signal containing 8 RC-Channels in 1 PIN ("RX" on board)
-// #define INPUT_IBUS
+#define INPUT_IBUS
 
 // ----- Type definitions
 typedef union {
@@ -114,8 +114,8 @@ float maxStepSpeed = 1500;
 #define PID_POS 1
 #define PID_SPEED 2
 
-#define PID_ANGLE_MAX 20
-PID pidAngle(cPD|cLP, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
+#define PID_ANGLE_MAX 12
+PID pidAngle(cPID, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
 #define PID_POS_MAX 35
 PID pidPos(cPD, dT, PID_POS_MAX, -PID_POS_MAX);
 PID pidSpeed(cP, dT, PID_POS_MAX, -PID_POS_MAX);
@@ -463,8 +463,8 @@ void loop() {
       speedInput = ((float) IBus.readChannel(1)-1500)/5.0; // Normalise between -100 and 100
       steerInput = ((float) IBus.readChannel(0)-1500)/5.0;
     }
-    avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
-    avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
+    // avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
+    // avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
 
     if (enableControl) {
       // Read receiver inputs
@@ -580,7 +580,7 @@ void loop() {
         digitalWrite(motEnablePin, 1); // Inverted action on enable pin
       }
     } else {
-      if (abs(filterAngle)<0.5) { // (re-)enable and reset stuff
+      if (abs(filterAngle)<5) { // (re-)enable and reset stuff
         enableControl = 1;
         controlMode = 1;
         avgMotSpeedSum = 0;
@@ -598,7 +598,11 @@ void loop() {
       if (IBus.readChannel(5)>1600) {
         enableControl = 1;
         controlMode = 1;
-        avgMotSpeedSum = 0;
+        if (!overrideMode) {
+          avgMotSpeedSum = 0;
+        } else {
+          avgMotSpeedSum = -(motLeft.speed + motRight.speed) / 2;
+        }
         motLeft.setStep(0);
         motRight.setStep(0);
         pidAngle.reset();
