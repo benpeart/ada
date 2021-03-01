@@ -11,26 +11,44 @@ To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/
 
 #include "PID.h"
 #include <Arduino.h>
-#include <streaming.h>
+#include <Streaming.h>
 
-PID::PID(uint8_t controllerType, float dT, float max, float min)
+PID::PID(void) {
+	_dT = 0.01;
+	controllerType = cPID;
+
+	maxOutput = 1;
+	minOutput = 1;
+
+	init();
+}
+
+PID::PID(uint8_t cType, float dT, float max, float min)
 {
 	_dT = dT;
-	_lastError = 0;
-	_sumError = 0;
-	_lastDterm = 0;
 	maxOutput = max;
 	minOutput = min;
 
-	this->controllerType = controllerType;
+	controllerType = cType;
 
-	intDeadband = 0;		// Integrator dead band width
-	resetInt = false;		// Reset integrator if true when error is within dead band
-
-	v[0] = 0;	// Output filter variables
-	v[1] = 0;
+	init();
 }
 
+void PID::init() {
+	_lastError = 0;
+	_sumError = 0;
+	_lastDterm = 0;
+	_lastSetpoint = 0;
+	intDeadband = 0;
+	resetInt = false;
+	setpoint = 0;
+	_lastInput = 0;
+
+	R = 0;
+
+	v[0] = 0;	// Output filter state variables
+	v[1] = 0;
+}
 
 float PID::calculate()
 {
@@ -41,7 +59,7 @@ float PID::calculate()
 	float output = _Pterm;
 
 	if (controllerType&cPI) {
-		float errorDeadzone;
+		float errorDeadzone = 0;
 		if (intDeadband > 0) {
 			if (abs(error) < intDeadband) {
 				errorDeadzone = 0;
@@ -65,10 +83,11 @@ float PID::calculate()
 
 	if (controllerType&cPD) {
 		// _Dterm = _lastDterm*_df1 + (error-_lastError)*_df2;
-		_Dterm = _lastDterm*_df1 - (input-_lastInput)*_df2;
+		_Dterm = _lastDterm*_df1 + (setpoint-_lastSetpoint)*R*_df2 - (input-_lastInput)*_df2;
 		_lastInput = input;
 		_lastDterm = _Dterm;
 		_lastError = error;
+		_lastSetpoint = setpoint;
 		output += _Dterm;
 	}
 

@@ -25,12 +25,14 @@ void FlySkyIBus::begin(Stream& stream)
   this->len = 0;
   this->chksum = 0;
   this->lchksum = 0;
+  this->active = 0;
 }
 
 void FlySkyIBus::loop(void)
 {
   while (stream->available() > 0)
   {
+    active = 1;
     uint32_t now = millis();
     if (state==DISCARD && now - last >= PROTOCOL_TIMEGAP)
     {
@@ -54,7 +56,7 @@ void FlySkyIBus::loop(void)
         {
           state = GET_LENGTH;
           while(Serial.available() > 0) {
-            char t = Serial.read();
+            Serial.read();
           }
         }
         break;
@@ -102,6 +104,13 @@ void FlySkyIBus::loop(void)
         break;
     }
   }
+
+  if (active) {
+    uint32_t now = millis();
+    if (now-last > 100) {
+      active = 0;
+    }
+  }
 }
 
 uint16_t FlySkyIBus::readChannel(uint8_t channelNr)
@@ -114,4 +123,8 @@ uint16_t FlySkyIBus::readChannel(uint8_t channelNr)
   {
     return 0;
   }
+}
+
+boolean FlySkyIBus::isActive(void) {
+  return active;
 }

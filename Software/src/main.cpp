@@ -22,7 +22,6 @@ Also, you have to publish all modifications.
 #include <ArduinoOTA.h>
 #include <Streaming.h>
 #include <MPU6050.h>
-#include <EEPROM.h>
 #include <PID.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -31,6 +30,26 @@ Also, you have to publish all modifications.
 #include <SPIFFS.h>
 #include <SPIFFSEditor.h>
 #include <fastStepper.h>
+// #include <par.h>
+#include <Preferences.h>  // for storing settings
+
+// ----- Input method
+
+// Driving behaviour
+float speedFactor = 0.5;  // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
+float steerFactor = 1.0;  // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
+float speedFilterConstant = 0.9;  // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+float steerFilterConstant = 0.9;  // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+
+// PPM (called CPPM, PPM-SUM) signal containing 8 RC-Channels in 1 PIN ("RX" on board)
+// Channel 1 = steer, Channel 2 = speed
+#define INPUT_PPM
+#define PPM_PIN 16  // GPIO-Number
+#define minPPM 990  // minimum PPM-Value (Stick down)
+#define maxPPM 2015  // maximum PPM-Value (Stick up)
+
+// FlySkyIBus signal containing 8 RC-Channels in 1 PIN ("RX" on board)
+// #define INPUT_IBUS
 
 // ----- Type definitions
 typedef union {
@@ -59,6 +78,7 @@ void readSensor();
 void initSensor(uint8_t n);
 void setMicroStep(uint8_t uStep);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
+void sendConfigurationData(uint8_t num);
 
 void IRAM_ATTR motLeftTimerFunction();
 void IRAM_ATTR motRightTimerFunction();
@@ -71,13 +91,7 @@ AsyncWebServer httpServer(80);
 WebSocketsServer wsServer = WebSocketsServer(81);
 
 // -- EEPROM
-#define EEPROM_SIZE 256
-#define EEPROM_ADR_INIT 0
-#define EEPROM_ADR_GYRO_OFFSET 50
-#define EEPROM_ADR_ANGLE_OFFSET 60
-#define EEPROM_ADR_WIFI_SSID 70
-#define EEPROM_ADR_WIFI_KEY 100
-#define EEPROM_ADR_WIFI_MODE 69
+Preferences preferences;
 
 // -- Stepper motors
 #define motEnablePin 27
@@ -90,11 +104,15 @@ fastStepper motRight(2, 15, 1, motRightTimerFunction);
 
 uint8_t microStep = 32;
 uint8_t motorCurrent = 150;
-float maxStepSpeed = 3000;
+float maxStepSpeed = 1500;
 
 // -- PID control
 #define dT_MICROSECONDS 5000
 #define dT dT_MICROSECONDS/1000000.0
+
+#define PID_ANGLE 0
+#define PID_POS 1
+#define PID_SPEED 2
 
 #define PID_ANGLE_MAX 20
 PID pidAngle(cPD, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
@@ -114,18 +132,44 @@ float accAngle = 0;
 float filterAngle = 0;
 float angleOffset = 2.0;
 float gyroFilterConstant = 0.996;
-float gyroGain = 1.1;
+float gyroGain = 1.0;
 
 // -- Others
 #define ledPin 2
 #define motorCurrentPin 25
 #define battVoltagePin 34
 
-float steerFilterConstant = 0.7;
-float speedFilterConstant = 0.9;
-
 // -- WiFi
 const char host[] = "balancingrobot";
+
+// Noise source (for system identification)
+boolean noiseSourceEnable = 0;
+float noiseSourceAmplitude = 1;
+
+// ----- Parameter definitions -----
+// void updatePIDParameters() {
+//   pidAngle.updateParameters();
+//   pidSpeed.updateParameters();
+//   pidPos.updateParameters();
+// }
+// par pidPar[] = {&pidAngle.K, &pidAngle.Ti, &pidAngle.Td, &pidAngle.N, &pidAngle.R, &pidAngle.minOutput, &pidAngle.maxOutput, &pidAngle.controllerType,
+//   &pidPos.K, &pidPos.Ti, &pidPos.Td, &pidPos.N, &pidPos.R, &pidPos.minOutput, &pidPos.maxOutput, &pidPos.controllerType,
+//   &pidSpeed.K, &pidSpeed.Ti, &pidSpeed.Td, &pidSpeed.N, &pidSpeed.R, &pidSpeed.minOutput, &pidSpeed.maxOutput, &pidSpeed.controllerType, &updatePIDParameters};
+//
+// parList pidParList(pidPar);
+
+// par motorPar[] = {&motorCurrent, &maxStepSpeed};
+// par wifiPar[] = {&wifiMode, &wifiSSID, &wifiKey};
+// par sensorPar[] = {&gyroOffset, &gyroGain, &angleOffset, &updateGyroOffset, &updateAngleOffset};
+// par controlPar[] = {&remoteType, &controlMode};
+
+// struct {
+//   struct {
+//     uint8_t mode;
+//     char ssid[30];
+//     char key[30];
+//   } wifi;
+// } settings;
 
 // ----- Interrupt functions -----
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -141,28 +185,72 @@ void IRAM_ATTR motRightTimerFunction() {
   portEXIT_CRITICAL_ISR(&timerMux);
 }
 
+
 void setMotorCurrent() {
   dacWrite(motorCurrentPin, motorCurrent);
 }
 
-uint8_t x = 0;
+void sendData(uint8_t *b, uint8_t l) {
+  wsServer.sendBIN(0,b,l);
+}
+
 void wirelessTask(void * parameters) {
   while (1) {
-  IBus.loop();
-  wsServer.loop(); // Shouldn't this run on core 0?
-
-    // x++;
-    // Serial.println(x);
-    delay(1);
+    #ifdef INPUT_IBUS
+    IBus.loop();
+    #endif
+    wsServer.loop();
+    delay(2);
   }
 }
+
+// -- PPM Input
+#ifdef INPUT_PPM
+volatile int interruptCounter = 0;
+int numberOfInterrupts = 0;
+
+// portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+
+//Array in which the channel values are stored
+volatile int32_t rxData[] = {0,0,0,0,0,0,0,0};
+//int in which the time difference to the last pulse is stored
+volatile uint32_t rxPre = 1;
+//int in which the current channel number to read out is stored
+volatile uint8_t channelNr = 0; 
+//indicates if the data in the channel value array are reliable e.g. there have been two sync breaks, so in the array there are only "real" values synced to the correspondinc channel number
+volatile uint8_t firstRoundCounter = 2;
+volatile boolean firstRoundPassed = false;
+volatile boolean validRxValues = false;
+
+void rxFalling() {  // will be called when the ppm peak is over
+  if(micros()-rxPre > 6000) {  // if the current peak is the first peak after the syncro break of 10ms
+    rxPre = micros();
+    channelNr = 0;  // reset the channel number to syncronize again
+    firstRoundCounter--;//the values in the first round are complete rubish, since there would'nt have been a first channel sync, this var indicates for the other functions, if the values are reliable
+    if(firstRoundCounter == 0) firstRoundPassed = true;
+  }
+  else {
+    rxData[channelNr] = micros()-rxPre;
+    rxPre = micros();
+    channelNr++;
+  } 
+  if(!validRxValues) {
+    if(firstRoundPassed) {
+        validRxValues = true;
+    }
+  }
+}
+#endif
 
 // ----- Main code
 void setup() {
 
   Serial.begin(115200);
+  #ifdef INPUT_IBUS
   IBus.begin(Serial2);
-  EEPROM.begin(EEPROM_SIZE);
+  #endif
+  preferences.begin("settings", false);  // false = RW-mode
+  // preferences.clear();  // Remove all preferences under the opened namespace
 
   pinMode(motEnablePin, OUTPUT);
   pinMode(motUStepPin1, OUTPUT);
@@ -196,36 +284,38 @@ void setup() {
   delay(50);
 
   // Init EEPROM, if not done before
-  if (EEPROM.read(EEPROM_ADR_INIT) != 123) {
-    EEPROM.write(EEPROM_ADR_INIT, 123);
-    for (uint16_t i=1; i<EEPROM_SIZE; i++) {
-      EEPROM.write(i, 0);
-    }
-    Serial.println("EEPROM init complete");
+  #define PREF_VERSION 1  // if setting structure has been changed, count this number up to delete all settings
+  if (preferences.getUInt("pref_version", 0) != PREF_VERSION) {
+    preferences.clear();  // Remove all preferences under the opened namespace
+    preferences.putUInt("pref_version", PREF_VERSION);
+    Serial << "EEPROM init complete, all preferences deleted, new pref_version: " << PREF_VERSION << "\n";
   }
 
   // Read gyro offsets
   Serial << "Gyro calibration values: ";
   for (uint8_t i=0; i<3; i++) {
-    gyroOffset[i] = EEPROM.readShort(EEPROM_ADR_GYRO_OFFSET + i*2);
+    char buf[16];
+    sprintf(buf, "gyro_offset_%u", i);
+    gyroOffset[i] = preferences.getShort(buf, 0);
     Serial << gyroOffset[i] << "\t";
   }
   Serial << endl;
 
   // Read angle offset
-  angleOffset = EEPROM.readFloat(EEPROM_ADR_ANGLE_OFFSET);
+  angleOffset = preferences.getFloat("angle_offset", 0.0);
 
   // Perform initial gyro measurements
   initSensor(50);
 
   // Connect to Wifi and setup OTA if known Wifi network cannot be found
   boolean wifiConnected = 0;
-  if (EEPROM.read(EEPROM_ADR_WIFI_MODE)==1) {
-    char ssid[30];
-    char key[30];
-    EEPROM.readString(EEPROM_ADR_WIFI_SSID, ssid, 30);
-    EEPROM.readString(EEPROM_ADR_WIFI_KEY, key, 30);
-    Serial << "Connecting to " << ssid << endl;
+  if (preferences.getUInt("wifi_mode", 0)==1) {
+    char ssid[63];
+    char key[63];
+    preferences.getBytes("wifi_ssid", ssid, 63);
+    preferences.getBytes("wifi_key", key, 63);
+    Serial << "Connecting to '" << ssid << "'" << endl;
+    // Serial << "Connecting to '" << ssid << "', '" << key << "'" << endl;
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, key);
     if (!(WiFi.waitForConnectResult() != WL_CONNECTED)) {
@@ -245,30 +335,30 @@ void setup() {
     Serial.println(WiFi.softAPIP());
   }
 
-    ArduinoOTA.setHostname(host);
-    ArduinoOTA
-    .onStart([]() {
-      String type;
-      if (ArduinoOTA.getCommand() == U_FLASH)
-        type = "sketch";
-      else // U_SPIFFS
-        type = "filesystem";
-      Serial.println("Start updating " + type);
-    })
-    .onEnd([]() {
-      Serial.println("\nEnd");
-    })
-    .onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r\n", (progress / (total / 100)));
-    })
-    .onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
-    });
+  ArduinoOTA.setHostname(host);
+  ArduinoOTA
+  .onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else // U_SPIFFS
+      type = "filesystem";
+    Serial.println("Start updating " + type);
+  })
+  .onEnd([]() {
+    Serial.println("\nEnd");
+  })
+  .onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r\n", (progress / (total / 100)));
+  })
+  .onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
 
   ArduinoOTA.begin();
 
@@ -276,6 +366,8 @@ void setup() {
   if (MDNS.begin(host)) {
     Serial.print("MDNS responder started, name: ");
     Serial.println(host);
+  } else {
+    Serial.println("Could not start MDNS responder");
   }
 
   httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -305,28 +397,39 @@ void setup() {
   // }
 
   dacWrite(motorCurrentPin, motorCurrent);
+
   pidAngle.setParameters(0.65,0,0.075,15);
-  pidAngle.setpoint = 0;
-
   pidPos.setParameters(1,0,1.2,20);
-  pidPos.setpoint = 0;
-
   pidSpeed.setParameters(6,5,0,20);
-  pidSpeed.setpoint = 0;
 
-  xTaskCreatePinnedToCore(
-                    wirelessTask,   /* Function to implement the task */
-                    "wirelessTask", /* Name of the task */
-                    10000,      /* Stack size in words */
-                    NULL,       /* Task input parameter */
-                    1,          /* Priority of the task */
-                    NULL,       /* Task handle. */
-                    0);  /* Core where the task should run */
+  // pidParList.read();
+
+  // PPM
+  #ifdef INPUT_PPM
+  pinMode(PPM_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PPM_PIN), rxFalling, FALLING);
+  #endif
+
+  // Run wireless related tasks on core 0
+  // xTaskCreatePinnedToCore(
+  //                   wirelessTask,   /* Function to implement the task */
+  //                   "wirelessTask", /* Name of the task */
+  //                   10000,      /* Stack size in words */
+  //                   NULL,       /* Task input parameter */
+  //                   0,          /* Priority of the task */
+  //                   NULL,       /* Task handle. */
+  //                   0);  /* Core where the task should run */
 
   Serial.println("Ready");
+
 }
 
+float steerInput, speedInput;
 
+float mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
+{
+ return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 void loop() {
   static unsigned long tLast = 0;
@@ -344,6 +447,7 @@ void loop() {
   static uint32_t lastInputTime = 0;
   uint32_t tNowMs;
   float absSpeed = 0;
+  float noiseValue = 0;
 
   unsigned long tNow = micros();
   tNowMs = millis();
@@ -352,37 +456,55 @@ void loop() {
     readSensor();
     if (enableControl) {
       // Read receiver inputs
-      if (IBus.readChannel(0)>0) { // Check if receiver is active
-        avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*(((float) IBus.readChannel(1)-1500)/50.0);
-        avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*(((float) IBus.readChannel(0)-1500)/4.0);
-        // uint8_t lastControlMode = controlMode;
-        // controlMode = (2000-IBus.readChannel(5))/450;
 
-        if (abs(avgSpeed)<0.2) {
-          // speedInput = 0;
-        } else {
-          lastInputTime = tNowMs;
-          if (controlMode==1) {
-            controlMode = 2;
-            motLeft.setStep(0);
-            motRight.setStep(0);
-            pidSpeed.resetDTerm();
-          }
-        }
-
-        if (abs(avgSteer)>1) {
-          steer = avgSteer * (1 - abs(avgSpeed)/150.0);
-        } else {
-          steer = 0;
-        }
-
+      #ifdef INPUT_IBUS
+      if (IBus.isActive()) { // Check if receiver is active
+        speedInput = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
+        steerInput = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
       }
+      #endif
+
+      #ifdef INPUT_PPM
+      if (rxData[1] == 0 || rxData[0] == 0) {  // no ppm signal (tx off || rx set to no signal in failsave || no reciever connected (use 100k pulldown))
+        speedInput = 0.0;
+        steerInput = 0.0;
+      } else {  // normal ppm signal
+        speedInput = mapfloat((float)constrain(rxData[1], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * speedFactor;  // Normalise between -100 and 100
+        steerInput = mapfloat((float)constrain(rxData[0], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * steerFactor;
+      }
+      #endif
+
+      avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
+      avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
+      // uint8_t lastControlMode = controlMode;
+      // controlMode = (2000-IBus.readChannel(5))/450;
+
+      if (abs(avgSpeed)<0.2) {
+        // speedInput = 0;
+      } else {
+        lastInputTime = tNowMs;
+        if (controlMode==1) {
+          controlMode = 2;
+          motLeft.setStep(0);
+          motRight.setStep(0);
+          pidSpeed.reset();
+        }
+      }
+
+      steer = avgSteer;
+      // if (abs(avgSteer)>1) {
+      //   steer = avgSteer * (1 - abs(avgSpeed)/150.0);
+      // } else {
+      //   steer = 0;
+      // }
+
+      // }
 
       if (tNowMs-lastInputTime>2000 && controlMode == 2) {
         controlMode = 1;
         motLeft.setStep(0);
         motRight.setStep(0);
-        pidPos.resetDTerm();
+        pidPos.reset();
       }
 
       if (controlMode == 0) {
@@ -400,8 +522,20 @@ void loop() {
         pidAngle.setpoint = pidSpeedOutput;
       }
 
-      pidAngle.input = filterAngle;
+
+      // Optionally, add some noise to angle for system identification purposes
+      // if (noiseSourceEnable) {
+      //   pidAngle.input = filterAngle + noiseSourceAmplitude*((random(1000)/1000.0)-0.5);
+      // } else {
+        pidAngle.input = filterAngle;
+      // }
+
       pidAngleOutput = pidAngle.calculate();
+
+      if (noiseSourceEnable) {
+        noiseValue = noiseSourceAmplitude*((random(1000)/1000.0)-0.5);
+        pidAngleOutput += noiseValue;
+      }
 
       avgMotSpeedSum += pidAngleOutput/2;
       if (avgMotSpeedSum>maxStepSpeed) {
@@ -465,24 +599,24 @@ void loop() {
             uint8_t fill1;
             uint8_t fill2;
             uint8_t fill3;
-            uint32_t time;
-            float f[11];
+            float f[13];
           };
-          uint8_t b[52];
+          uint8_t b[56];
         } plotData;
 
-        plotData.time = micros();
-        plotData.f[0] = accAngle;
-        plotData.f[1] = filterAngle;
-        plotData.f[2] = pidAngle.setpoint;
-        plotData.f[3] = pidAngle.input;
-        plotData.f[4] = pidAngleOutput;
-        plotData.f[5] = pidPos.setpoint;
-        plotData.f[6] = pidPos.input;
-        plotData.f[7] = pidPosOutput;
-        plotData.f[8] = pidSpeed.setpoint;
-        plotData.f[9] = pidSpeed.input;
-        plotData.f[10] = pidSpeedOutput;
+        plotData.f[0] = micros()/1000000.0;
+        plotData.f[1] = accAngle;
+        plotData.f[2] = filterAngle;
+        plotData.f[3] = pidAngle.setpoint;
+        plotData.f[4] = pidAngle.input;
+        plotData.f[5] = pidAngleOutput;
+        plotData.f[6] = pidPos.setpoint;
+        plotData.f[7] = pidPos.input;
+        plotData.f[8] = pidPosOutput;
+        plotData.f[9] = pidSpeed.setpoint;
+        plotData.f[10] = pidSpeed.input;
+        plotData.f[11] = pidSpeedOutput;
+        plotData.f[12] = noiseValue;
         wsServer.sendBIN(0, plotData.b, sizeof(plotData.b));
       }
     }
@@ -493,15 +627,26 @@ void loop() {
     // }
     // Serial << endl;
 
+    // Serial << speedInput << "\t" << steerInput << endl;
+
     // Serial << microStep << "\t" << absSpeed << "\t" << endl;
 
     parseSerial();
 
+    // Serial << micros()-tNow << "\t";
+
     tLast = tNow;
+
+      // Run other tasks
+    ArduinoOTA.handle();
+    #ifdef INPUT_IBUS
+    IBus.loop();
+    #endif
+    wsServer.loop();
+
+    // Serial << micros()-tNow << endl;
   }
 
-  // Run other tasks
-  ArduinoOTA.handle();
   // delay(1);
 }
 
@@ -584,24 +729,41 @@ void parseCommand(char* data, uint8_t length) {
       case 'g':
         gyroGain = atof(data+1);
         break;
-      case 'h':
-        plot.enable = atoi(data+1);
+      case 'p': {
+        switch (data[1]) {
+          case 'e':
+            plot.enable = atoi(data+2);
+            break;
+          case 'p':
+            plot.prescaler = atoi(data+2);
+            break;
+          case 'n': // Noise source enable
+            noiseSourceEnable = atoi(data+2);
+            break;
+          case 'a': // Noise source amplitude
+            noiseSourceAmplitude = atof(data+2);
+            break;
+        }
         break;
-      case 'i':
-        plot.prescaler = atoi(data+1);
-        break;
+      }
+      // case 'h':
+      //   plot.enable = atoi(data+1);
+      //   break;
+      // case 'i':
+      //   plot.prescaler = atoi(data+1);
+      //   break;
       case 'j':
         gyroGain = atof(data+1);
         break;
       case 'k': {
         uint8_t cmd2 = atoi(data+1);
-        if (cmd2==1) {
+        if (cmd2==1) {  // calibrate gyro
           calculateGyroOffset(100);
-        } else if (cmd2==2) {
+        } else if (cmd2==2) {  // calibrate acc
           Serial << "Updating angle offset from " << angleOffset;
           angleOffset = filterAngle;
           Serial << " to " << angleOffset << endl;
-          EEPROM.writeFloat(EEPROM_ADR_ANGLE_OFFSET, angleOffset);
+          preferences.putFloat("angle_offset", angleOffset);
         }
         break;}
       case 'l':
@@ -612,36 +774,33 @@ void parseCommand(char* data, uint8_t length) {
         break;
       case 'w': {
         char cmd2 = data[1];
-        char buf[30];
+        char buf[63];
         uint8_t len;
 
         switch (cmd2) {
           case 'r':
             Serial.println("Rebooting...");
             ESP.restart();
+            // pidParList.sendList(&wsServer);
             break;
           case 'l': // Send wifi networks to WS client
             sendWifiList();
             break;
           case 's': // Update WiFi SSID
             len = length-3;
-            // EEPROM.write(EEPROM_ADR_WIFI_SSID, len);
             memcpy(buf, &data[2], len);
             buf[len] = 0;
-            EEPROM.writeString(EEPROM_ADR_WIFI_SSID, buf);
-            EEPROM.commit();
+            preferences.putBytes("wifi_ssid", buf, 63);
             break;
           case 'k': // Update WiFi key
             len = length-3;
             memcpy(buf, &data[2], len);
             buf[len] = 0;
-            EEPROM.writeString(EEPROM_ADR_WIFI_KEY, buf);
-            EEPROM.commit();
+            preferences.putBytes("wifi_key", buf, 63);
             break;
           case 'm': // WiFi mode (0=AP, 1=use SSID)
             Serial.println(atoi(&data[2]));
-            EEPROM.write(EEPROM_ADR_WIFI_MODE, atoi(&data[2]));
-            EEPROM.commit();
+            preferences.putUInt("wifi_mode", atoi(&data[2]));
           }
         break;}
     }
@@ -680,18 +839,18 @@ void calculateGyroOffset(uint8_t nSample) {
     sumX += x;
     sumY += y;
     sumZ += z;
-    delay(1);
+    delay(5);
   }
 
   gyroOffset[0] = sumX/nSample;
   gyroOffset[1] = sumY/nSample;
   gyroOffset[2] = sumZ/nSample;
 
-
   for (uint8_t i=0; i<3; i++) {
-    EEPROM.writeShort(EEPROM_ADR_GYRO_OFFSET + i*2, gyroOffset[i]);
+    char buf[16];
+    sprintf(buf, "gyro_offset_%u", i);
+    preferences.putShort(buf, gyroOffset[i]);
   }
-  EEPROM.commit();
 
   Serial << "New gyro calibration values: " << gyroOffset[0] << "\t" << gyroOffset[1] << "\t" << gyroOffset[2] << endl;
 }
@@ -734,19 +893,6 @@ void setMicroStep(uint8_t uStep) {
   digitalWrite(motUStepPin3, uStepPow&0x04);
 }
 
-void hexdump(const void *mem, uint32_t len, uint8_t cols = 16) {
-	const uint8_t* src = (const uint8_t*) mem;
-	Serial.printf("\n[HEXDUMP] Address: 0x%08X len: 0x%X (%d)", (ptrdiff_t)src, len, len);
-	for(uint32_t i = 0; i < len; i++) {
-		if(i % cols == 0) {
-			Serial.printf("\n[0x%08X] 0x%08X: ", (ptrdiff_t)src, i);
-		}
-		Serial.printf("%02X ", *src);
-		src++;
-	}
-	Serial.printf("\n");
-}
-
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
 
     switch(type) {
@@ -756,81 +902,47 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         case WStype_CONNECTED: {
                 IPAddress ip = wsServer.remoteIP(num);
                 Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-
-        				// send message to client
-                char wBuf[40];
-                sprintf(wBuf, "c%dp%5.2f", 1, pidAngle.K);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%di%5.2f", 1, pidAngle.Ti);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dd%5.2f", 1, pidAngle.Td);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dn%5.2f", 1, pidAngle.N);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dm%5.1f", 1, pidAngle.maxOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%do%5.1f", 1, -pidAngle.minOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dp%5.2f", 2, pidPos.K);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%di%5.2f", 2, pidPos.Ti);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dd%5.2f", 2, pidPos.Td);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dn%5.2f", 2, pidPos.N);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dm%5.1f", 2, pidPos.maxOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%do%5.1f", 2, -pidPos.minOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dp%5.2f", 3, pidSpeed.K);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%di%5.2f", 3, pidSpeed.Ti);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dd%5.2f", 3, pidSpeed.Td);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dn%5.2f", 3, pidSpeed.N);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%dm%5.1f", 3, pidSpeed.maxOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "c%do%5.1f", 3, -pidSpeed.minOutput);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "h%4.2f", speedFilterConstant);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "i%4.2f", steerFilterConstant);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "v%d", motorCurrent);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "j%4.2f", gyroGain);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "n%5.3f", gyroFilterConstant);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "l%5.0f", maxStepSpeed);
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "wm%d", EEPROM.read(EEPROM_ADR_WIFI_MODE));
-                wsServer.sendTXT(num, wBuf);
-                sprintf(wBuf, "ws%s", EEPROM.readString(EEPROM_ADR_WIFI_SSID).c_str());
-                wsServer.sendTXT(num, wBuf);
-
+                sendConfigurationData(num);
             }
             break;
         case WStype_TEXT:
             Serial.printf("[%u] get Text: %s\n", num, payload);
             parseCommand((char*) payload, length);
-
-            // send message to client
-            // webSocket.sendTXT(num, "message here");
-
-            // send data to all connected clients
-            // webSocket.broadcastTXT("message here");
             break;
-        case WStype_BIN:
-            Serial.printf("[%u] get binary length: %u\n", num, length);
-            hexdump(payload, length);
+        case WStype_BIN: {
+            // Serial.printf("[%u] get binary length: %u\n", num, length);
 
-            // send message to client
-            // webSocket.sendBIN(num, payload, length);
+            // if (length==6) {
+            //   cmd c;
+            //   memcpy(c.arr, payload, 6);
+            //   Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
+            //
+            //   if (c.grp<parList::groupCounter) {
+            //     if (c.grp==0 && c.cmd<100) {
+            //       pidParList.set(c.cmd,c.val);
+            //
+            //       // pidPar[c.cmd].setFloat(c.val);
+            //     }
+            //     if (c.cmd==253) {
+            //       pidParList.sendList(&wsServer);
+            //     }
+            //     if (c.cmd==254) {
+            //       pidParList.read();
+            //     }
+            //     if (c.cmd==255) {
+            //       pidParList.write();
+            //     }
+            //   } else if (c.grp==100) {
+            //     if (c.cmd==0) {
+            //       speedInput = c.val;
+            //     } else if (c.cmd==1) {
+            //       steerInput = c.val;
+            //     }
+            //   }
+            // }
+
             break;
+          }
 		case WStype_ERROR:
 		case WStype_FRAGMENT_TEXT_START:
 		case WStype_FRAGMENT_BIN_START:
@@ -839,4 +951,69 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 			break;
     }
 
+}
+
+void sendConfigurationData(uint8_t num) {
+  // send message to client
+  char wBuf[63];
+  char buf[63];
+  sprintf(wBuf, "c%dp%.4f", 1, pidAngle.K);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%di%.4f", 1, pidAngle.Ti);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dd%.4f", 1, pidAngle.Td);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dn%.4f", 1, pidAngle.N);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dr%.4f", 1, pidAngle.R);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dm%.4f", 1, pidAngle.maxOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%do%.4f", 1, -pidAngle.minOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dp%.4f", 2, pidPos.K);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%di%.4f", 2, pidPos.Ti);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dd%.4f", 2, pidPos.Td);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dn%.4f", 2, pidPos.N);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dr%.4f", 2, pidPos.R);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dm%.4f", 2, pidPos.maxOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%do%.4f", 2, -pidPos.minOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dp%.4f", 3, pidSpeed.K);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%di%.4f", 3, pidSpeed.Ti);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dd%.4f", 3, pidSpeed.Td);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dn%.4f", 3, pidSpeed.N);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dr%.4f", 3, pidSpeed.R);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%dm%.4f", 3, pidSpeed.maxOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "c%do%.4f", 3, -pidSpeed.minOutput);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "h%.4f", speedFilterConstant);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "i%.4f", steerFilterConstant);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "v%d", motorCurrent);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "j%.4f", gyroGain);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "n%.4f", gyroFilterConstant);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "l%.4f", maxStepSpeed);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "wm%d", preferences.getUInt("wifi_mode", 0));  // 0=AP, 1=Client
+  wsServer.sendTXT(num, wBuf);
+  preferences.getBytes("wifi_ssid", buf, 63);
+  sprintf(wBuf, "ws%s", buf);
+  wsServer.sendTXT(num, wBuf);
 }

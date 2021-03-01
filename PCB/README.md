@@ -2,8 +2,8 @@
 This folder contains KiCad (5.0.0) design files for the BalancingRobot PCB. 
 
 # Features
-* Supports both DRV8825 and A4988 based stepper drivers
-* Supported voltage: 8 - 24V (2-6S LiPo/Li-ion)
+* Supports both DRV8825 and A4988 based stepper drivers. Should also be compatible with TMC2100 (with settings configurable via ESP32), not tested yet though.
+* Supported voltage: ~7 - 24V (2-6S LiPo/Li-ion)
 * Digital current control of steppers (you'll need to desolder the potmeter and add a wire)
 * Dynamic microstep switching, allowing for insane speeds
 * Connections: 
@@ -40,11 +40,34 @@ In the end, the PCB should look something like this
 ![Stepper driver improvements](/PCB/pictures/DSCN4937.JPG)
 
 ## Advanced
+Some optional improvements are listed here, which are not required for basic operation. 
+
 You can de-solder the current adjustment potentiometer on the stepper driver breakout boards. Add a wire to the wiper terminal, and connect the (two) wires to J4. Current can then be adjusted via the web interface. Or, get creative, and implement some current saving functionality.
 
 For better performance, you can tie the decay mode pin of the DRV8825 to VCC, setting it in fast mode. The DRV8825 sometimes skips steps in slow/mixed decay mode. Below picture illustrates both improvements.
 
 ![Stepper driver improvements](/PCB/pictures/DSCN4931.JPG)
+
+## Auxiliary header
+Connector J2 has a grid of 12 pins (3x4), with some general pins broken out, together with all unused ESP32 IO pins. See the close-up of the header below. Pin numbering in this picture is used in the table below to identify pins.
+
+//![Auxiliary header pinout](/PCB/pictures/auxHeader.PNG)
+<img src="/PCB/pictures/auxHeader.PNG" width="400" />
+
+| Pin # | Name    | ESP32 pin |
+|-------|---------|-----------|
+| 1     | 5V      | Vin       |
+| 2     | IMU_SCL | D22       |
+| 3     | IMU_SDA | D21       |
+| 4     | GND     | GND       |
+| 5     | AUX1    | D32       |
+| 6     | AUX2    | D33       |
+| 7     | GND     | GND       |
+| 8     | AUX3    | D35       |
+| 9     | AUX4    | D26       |
+| 10    | VCC     | 3V3       |
+| 11    | AUX5    | D39       |
+| 12    | AUX6    | D36       |
 
 # BOM
 Applicable for v1.1. v1.0 doesn't have R7.
@@ -86,10 +109,9 @@ Initial version
 * Added second via in 24V trace, or rather added trace to second via which wasn't there in v1.0
 * Swapped + and - symbols on silkscreen close to RX header 
 * Added a 10k pull-up on the stepper driver enable. In v1.0, no pull-up is present, meaning the steppers are enabled if the ESP32 isn't running. No big deal, but somewhat neater to disable steppers if the ESP32 isn't running.
+## v1.2
+* Added optional 100k RX pulldown resistor
+* Added optional 5V filtering cap (might be useful if for example some Neopixels are connected to 5V line)
+* Added some markings for the buck converter, clarifying the mounting direction
+* Added connections for (fused) battery voltage (J6)
 
-# To do for this readme
-* Add picture of assembled board
-* Add some pictures to the assembly section
-* Add J2 header pinout
-* Stepper current adjustment
-* Refer to next steps
