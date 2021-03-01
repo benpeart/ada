@@ -485,7 +485,7 @@ void loop() {
       // }
 
       // Disable control if robot is almost horizontal. Re-enable if upright.
-      if (abs(filterAngle)>70) {
+      if (abs(filterAngle)>70 && (IBus.readChannel(5)<1500 && IBus.readChannel(5)>800)) {
         enableControl = 0;
         motLeft.speed = 0;
         motRight.speed = 0;
@@ -504,6 +504,21 @@ void loop() {
         overrideMode = 0;
         digitalWrite(motEnablePin, 0); // Inverted action on enable pin
         // delay(1);
+      }
+
+      // Self right
+      if (IBus.readChannel(5)>1600) {
+        enableControl = 1;
+        controlMode = 1;
+        avgMotSpeedSum = 0;
+        motLeft.setStep(0);
+        motRight.setStep(0);
+        pidAngle.reset();
+        pidPos.reset();
+        pidSpeed.reset();
+        overrideMode = 0;
+        digitalWrite(motEnablePin, 0); // Inverted action on enable pin
+
       }
 
       // Override control
