@@ -36,7 +36,7 @@ Also, you have to publish all modifications.
 // ----- Input method
 
 // Driving behaviour
-float speedFactor = 0.5;  // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
+float speedFactor = 0.7;  // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
 float steerFactor = 1.0;  // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
 float speedFilterConstant = 0.9;  // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 float steerFilterConstant = 0.9;  // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
@@ -60,6 +60,18 @@ typedef union {
   };
   uint8_t array[6];
 } command;
+
+typedef union {
+  uint8_t arr[6];
+  struct {
+    uint8_t grp;
+    uint8_t cmd;
+    union {
+      float val;
+      uint8_t valU8[4];
+    };
+  }  __attribute__((packed));
+} cmd;
 
 // Plot settings
 struct {
@@ -459,35 +471,30 @@ void loop() {
   if (tNow-tLast > dT_MICROSECONDS) {
     readSensor();
     // Read receiver inputs
+    #ifdef INPUT_IBUS
     if (IBus.isActive()) { // Check if receiver is active
-      speedInput = ((float) IBus.readChannel(1)-1500)/5.0; // Normalise between -100 and 100
-      steerInput = ((float) IBus.readChannel(0)-1500)/5.0;
+      speedInput = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
+      steerInput = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
     }
-    // avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
-    // avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
+    #endif
+
+    #ifdef INPUT_PPM
+    if (rxData[1] == 0 || rxData[0] == 0) {  // no ppm signal (tx off || rx set to no signal in failsave || no reciever connected (use 100k pulldown))
+      speedInput = 0.0;
+      steerInput = 0.0;
+    } else {  // normal ppm signal
+      speedInput = mapfloat((float)constrain(rxData[1], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * speedFactor;  // Normalise between -100 and 100
+      steerInput = mapfloat((float)constrain(rxData[0], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * steerFactor;
+    }
+    #endif
+
+      avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
+      avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
 
     if (enableControl) {
       // Read receiver inputs
 
-      #ifdef INPUT_IBUS
-      if (IBus.isActive()) { // Check if receiver is active
-        speedInput = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
-        steerInput = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
-      }
-      #endif
 
-      #ifdef INPUT_PPM
-      if (rxData[1] == 0 || rxData[0] == 0) {  // no ppm signal (tx off || rx set to no signal in failsave || no reciever connected (use 100k pulldown))
-        speedInput = 0.0;
-        steerInput = 0.0;
-      } else {  // normal ppm signal
-        speedInput = mapfloat((float)constrain(rxData[1], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * speedFactor;  // Normalise between -100 and 100
-        steerInput = mapfloat((float)constrain(rxData[0], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * steerFactor;
-      }
-      #endif
-
-      avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
-      avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
       // uint8_t lastControlMode = controlMode;
       // controlMode = (2000-IBus.readChannel(5))/450;
 
@@ -535,15 +542,11 @@ void loop() {
       }
 
 
-      // Optionally, add some noise to angle for system identification purposes
-      // if (noiseSourceEnable) {
-      //   pidAngle.input = filterAngle + noiseSourceAmplitude*((random(1000)/1000.0)-0.5);
-      // } else {
-        pidAngle.input = filterAngle;
-      // }
+      pidAngle.input = filterAngle;
 
       pidAngleOutput = pidAngle.calculate();
 
+      // Optionally, add some noise to angle for system identification purposes
       if (noiseSourceEnable) {
         noiseValue = noiseSourceAmplitude*((random(1000)/1000.0)-0.5);
         pidAngleOutput += noiseValue;
@@ -673,8 +676,8 @@ void loop() {
         // plotData.f[12] = noiseValue;?
         plotData.f[9] = ayg;
         plotData.f[10] = azg;
-        // plotData.f[11] = rxg;
-        plotData.f[11] = microStep;
+        plotData.f[11] = rxg;
+        // plotData.f[11] = microStep;
         wsServer.sendBIN(0, plotData.b, sizeof(plotData.b));
       }
     }
@@ -974,9 +977,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         case WStype_BIN: {
             // Serial.printf("[%u] get binary length: %u\n", num, length);
 
-            // if (length==6) {
-            //   cmd c;
-            //   memcpy(c.arr, payload, 6);
+            if (length==6) {
+              cmd c;
+              memcpy(c.arr, payload, 6);
             //   Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
             //
             //   if (c.grp<parList::groupCounter) {
@@ -995,13 +998,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             //       pidParList.write();
             //     }
             //   } else if (c.grp==100) {
-            //     if (c.cmd==0) {
-            //       speedInput = c.val;
-            //     } else if (c.cmd==1) {
-            //       steerInput = c.val;
-            //     }
-            //   }
-            // }
+              if (c.grp==100) {
+                if (c.cmd==0) {
+                  speedInput = c.val;
+                } else if (c.cmd==1) {
+                  steerInput = c.val;
+                }
+              }
+            }
 
             break;
           }
