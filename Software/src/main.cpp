@@ -413,7 +413,7 @@ void setup() {
 
   dacWrite(motorCurrentPin, motorCurrent);
 
-  pidAngle.setParameters(0.65,0.6,0.075,15);
+  pidAngle.setParameters(0.65,1.0,0.075,15);
   pidPos.setParameters(1,0,1.2,20);
   pidSpeed.setParameters(6,5,0,20);
 
@@ -463,7 +463,9 @@ void loop() {
   uint32_t tNowMs;
   float absSpeed = 0;
   float noiseValue = 0;
-  static boolean overrideMode = 0;
+  static boolean overrideMode = 0, lastOverrideMode = 0;
+  static boolean selfRight = 0;
+  static boolean disableControl = 0;
 
   unsigned long tNow = micros();
   tNowMs = millis();
@@ -475,6 +477,23 @@ void loop() {
     if (IBus.isActive()) { // Check if receiver is active
       speedInput = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
       steerInput = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
+
+      if (IBus.readChannel(3)>1600 && !selfRight && !enableControl) { // Start self-right action (stops when robot is upright)
+        selfRight = 1;
+      } else if (IBus.readChannel(3)<1400 && enableControl && !disableControl) { // Sort of kill-switch
+      // Doesn't work perfectly yet. Maybe better to introduce a disableControl flag, which in control loop disables control. 
+        disableControl = 1;
+        selfRight = 0;
+      }
+      if (IBus.readChannel(4)>1600) {
+        overrideMode = 1;
+      } else if (IBus.readChannel(4)<1400) {
+        overrideMode = 0;
+      }
+      // Add similar flag for override. Override needs to be active until selfright is selected, or robot is upright. 
+      // Add control for expert/beginner mode (or use turning knob)
+      // Implement controls in web interface. 
+      // How to detect if selfright is not working? Slip detection needed! If motors are moving / accelerating (there's an error in PID) and angle is not really moving, there's slip. 
     }
     #endif
 
@@ -576,57 +595,70 @@ void loop() {
       // }
 
       // Disable control if robot is almost horizontal. Re-enable if upright.
-      if (abs(filterAngle)>70 && (IBus.readChannel(5)<1500 && IBus.readChannel(5)>800)) {
+      if ((abs(filterAngle)>70 && !selfRight) || disableControl) {
         enableControl = 0;
         motLeft.speed = 0;
         motRight.speed = 0;
         digitalWrite(motEnablePin, 1); // Inverted action on enable pin
       }
-    } else {
-      if (abs(filterAngle)<5) { // (re-)enable and reset stuff
-        enableControl = 1;
-        controlMode = 1;
-        avgMotSpeedSum = 0;
-        motLeft.setStep(0);
-        motRight.setStep(0);
-        pidAngle.reset();
-        pidPos.reset();
-        pidSpeed.reset();
-        overrideMode = 0;
-        digitalWrite(motEnablePin, 0); // Inverted action on enable pin
-        // delay(1);
-      }
-
-      // Self right
-      if (IBus.readChannel(5)>1600) {
-        enableControl = 1;
-        controlMode = 1;
-        if (!overrideMode) {
-          avgMotSpeedSum = 0;
-        } else {
-          avgMotSpeedSum = -(motLeft.speed + motRight.speed) / 2;
-        }
-        motLeft.setStep(0);
-        motRight.setStep(0);
-        pidAngle.reset();
-        pidPos.reset();
-        pidSpeed.reset();
-        overrideMode = 0;
-        digitalWrite(motEnablePin, 0); // Inverted action on enable pin
-
-      }
-
+      if (abs(filterAngle)<5 && selfRight) selfRight = 0;
+    } else { // Control not active
+    
       // Override control
-      if (IBus.readChannel(4)>1600 && !overrideMode && !enableControl) {
+      if (overrideMode && !lastOverrideMode) { // Transition from disable to enable
         // Enable override mode
         motLeft.speed = 0;
         motRight.speed = 0;
-        digitalWrite(motEnablePin, 0); // Inverted action on enable pin
+        digitalWrite(motEnablePin, 0); // Enable motors
         overrideMode = 1;
-      } else if (IBus.readChannel(4)<1500 && overrideMode) {
+      } else if (!overrideMode && lastOverrideMode) {
         digitalWrite(motEnablePin, 1); // Inverted action on enable pin
         overrideMode = 0;
       }
+      lastOverrideMode = overrideMode;
+
+      if (abs(filterAngle)<5 || selfRight) { // (re-)enable and reset stuff
+        enableControl = 1;
+        disableControl = 0;
+
+        controlMode = 1;
+        // avgMotSpeedSum = 0;
+        
+        if (!overrideMode) {
+          avgMotSpeedSum = 0;
+          pidAngle.reset();
+          digitalWrite(motEnablePin, 0); // Inverted action on enable pin
+        } else {
+          avgMotSpeedSum = -(motLeft.speed + motRight.speed) / 2;
+          overrideMode = 0;
+        }
+
+        motLeft.setStep(0);
+        motRight.setStep(0);
+        pidPos.reset();
+        pidSpeed.reset();
+        // delay(1);
+      }
+
+      // Self right. Enable controller.
+      // if (selfRight) {
+      //   enableControl = 1;
+      //   controlMode = 1;
+      //   if (!overrideMode) {
+      //     avgMotSpeedSum = 0;
+      //   } else {
+      //     avgMotSpeedSum = -(motLeft.speed + motRight.speed) / 2;
+      //   }
+      //   motLeft.setStep(0);
+      //   motRight.setStep(0);
+      //   pidAngle.reset();
+      //   pidPos.reset();
+      //   pidSpeed.reset();
+      //   overrideMode = 0;
+      //   digitalWrite(motEnablePin, 0); // Inverted action on enable pin
+
+      // }
+
 
       if (overrideMode) {
         float spd = avgSpeed;
@@ -635,6 +667,10 @@ void loop() {
         // if (str<3) str = 0;
         motLeft.speed = -30*spd + 2*str;
         motRight.speed = -30*spd - 2*str;
+
+        // Run angle PID controller in background, such that it matches when controller takes over, if needed
+        pidAngle.input = filterAngle;
+        pidAngleOutput = pidAngle.calculate();
       }
       // Serial << motLeft.speed << "\t" << motRight.speed << "\t" << overrideMode << endl;
     }
@@ -686,11 +722,14 @@ void loop() {
     // for (uint8_t i=0; i<6; i++) {
     //   Serial << IBus.readChannel(i) << "\t";
     // }
-    // Serial << endl;
+    Serial << filterAngle << "\t";
 
+    Serial << selfRight;
     // Serial << speedInput << "\t" << steerInput << endl;
 
     // Serial << microStep << "\t" << absSpeed << "\t" << endl;
+
+    Serial << endl;
 
     parseSerial();
 
