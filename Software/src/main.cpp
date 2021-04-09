@@ -617,19 +617,20 @@ void loop() {
       }
       lastOverrideMode = overrideMode;
 
+      if (abs(filterAngle)>70) disableControl = 0; // Disable action is completed if robot has fallen down
+
       if (abs(filterAngle)<5 || selfRight) { // (re-)enable and reset stuff
         enableControl = 1;
-        disableControl = 0;
 
         controlMode = 1;
         // avgMotSpeedSum = 0;
         
         if (!overrideMode) {
           avgMotSpeedSum = 0;
-          pidAngle.reset();
           digitalWrite(motEnablePin, 0); // Inverted action on enable pin
+          pidAngle.reset();
         } else {
-          avgMotSpeedSum = -(motLeft.speed + motRight.speed) / 2;
+          avgMotSpeedSum = (motLeft.speed + motRight.speed) / 2;
           overrideMode = 0;
         }
 
@@ -671,6 +672,9 @@ void loop() {
         // Run angle PID controller in background, such that it matches when controller takes over, if needed
         pidAngle.input = filterAngle;
         pidAngleOutput = pidAngle.calculate();
+        // pidSpeed.setpoint = avgSpeed;
+        // pidSpeed.input = -(motLeft.speed+motRight.speed)/2/100.0;
+        // pidSpeedOutput = pidSpeed.calculate();
       }
       // Serial << motLeft.speed << "\t" << motRight.speed << "\t" << overrideMode << endl;
     }
@@ -706,13 +710,13 @@ void loop() {
         plotData.f[6] = pidPos.setpoint;
         plotData.f[7] = pidPos.input;
         plotData.f[8] = pidPosOutput;
-        // plotData.f[9] = pidSpeed.setpoint;
-        // plotData.f[10] = pidSpeed.input;
-        // plotData.f[11] = pidSpeedOutput;
+        plotData.f[9] = pidSpeed.setpoint;
+        plotData.f[10] = pidSpeed.input;
+        plotData.f[11] = pidSpeedOutput;
         // plotData.f[12] = noiseValue;?
-        plotData.f[9] = ayg;
-        plotData.f[10] = azg;
-        plotData.f[11] = rxg;
+        // plotData.f[9] = ayg;
+        // plotData.f[10] = azg;
+        // plotData.f[11] = rxg;
         // plotData.f[11] = microStep;
         wsServer.sendBIN(0, plotData.b, sizeof(plotData.b));
       }
