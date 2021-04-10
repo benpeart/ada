@@ -641,26 +641,6 @@ void loop() {
         // delay(1);
       }
 
-      // Self right. Enable controller.
-      // if (selfRight) {
-      //   enableControl = 1;
-      //   controlMode = 1;
-      //   if (!overrideMode) {
-      //     avgMotSpeedSum = 0;
-      //   } else {
-      //     avgMotSpeedSum = -(motLeft.speed + motRight.speed) / 2;
-      //   }
-      //   motLeft.setStep(0);
-      //   motRight.setStep(0);
-      //   pidAngle.reset();
-      //   pidPos.reset();
-      //   pidSpeed.reset();
-      //   overrideMode = 0;
-      //   digitalWrite(motEnablePin, 0); // Inverted action on enable pin
-
-      // }
-
-
       if (overrideMode) {
         float spd = avgSpeed;
         float str = avgSteer;
@@ -779,33 +759,26 @@ void parseCommand(char* data, uint8_t length) {
         char cmd2 = data[2];
         float val = atof(data+3);
 
-        // Make a temporary pid object, in which parameters are updated
-        PID pidTemp = pidAngle;
+        // Make pointer to PID controller
+        PID* pidTemp;
         switch (controllerNumber) {
-          case 1: pidTemp = pidAngle; break;
-          case 2: pidTemp = pidPos;   break;
-          case 3: pidTemp = pidSpeed; break;
+          case 1: pidTemp = &pidAngle; break;
+          case 2: pidTemp = &pidPos;   break;
+          case 3: pidTemp = &pidSpeed; break;
         }
 
         switch (cmd2) {
-          case 'p': pidTemp.K = val;  break;
-          case 'i': pidTemp.Ti = val; break;
-          case 'd': pidTemp.Td = val; break;
-          case 'n': pidTemp.N = val; break;
-          case 't': pidTemp.controllerType = (uint8_t) val; break;
-          case 'm': pidTemp.maxOutput = val; break;
-          case 'o': pidTemp.minOutput = -val; break;
+          case 'p': pidTemp->K = val;  break;
+          case 'i': pidTemp->Ti = val; break;
+          case 'd': pidTemp->Td = val; break;
+          case 'n': pidTemp->N = val; break;
+          case 't': pidTemp->controllerType = (uint8_t) val; break;
+          case 'm': pidTemp->maxOutput = val; break;
+          case 'o': pidTemp->minOutput = -val; break;
         }
-        pidTemp.updateParameters();
+        pidTemp->updateParameters();
 
-        // Store temporary pid object in correct pid object
-        switch (controllerNumber) {
-          case 1: pidAngle = pidTemp; break;
-          case 2: pidPos = pidTemp;   break;
-          case 3: pidSpeed = pidTemp; break;
-        }
-
-        Serial << controllerNumber << "\t" << pidTemp.K << "\t" << pidTemp.Ti << "\t" << pidTemp.Td << "\t" << pidTemp.N << "\t" << pidTemp.controllerType << endl;
+        Serial << controllerNumber << "\t" << pidTemp->K << "\t" << pidTemp->Ti << "\t" << pidTemp->Td << "\t" << pidTemp->N << "\t" << pidTemp->controllerType << endl;
         break;
       }
       case 'a': // Change angle offset
