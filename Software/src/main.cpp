@@ -79,6 +79,13 @@ struct {
   uint8_t prescaler = 4;
 } plot;
 
+struct {
+  float speed = 0;
+  float steer = 0;
+  bool selfRight = 0;
+  bool disableControl = 0;
+} remoteControl;
+
 #define FORMAT_SPIFFS_IF_FAILED true
 
 // ----- Function prototypes
@@ -439,7 +446,6 @@ void setup() {
 
 }
 
-float steerInput, speedInput;
 
 float mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
 {
@@ -475,19 +481,15 @@ void loop() {
     // Read receiver inputs
     #ifdef INPUT_IBUS
     if (IBus.isActive()) { // Check if receiver is active
-      speedInput = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
-      steerInput = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
+      remoteControl.speed = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
+      remoteControl.steer = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
 
-      if (IBus.readChannel(3)>1600 && !selfRight && !enableControl) { // Start self-right action (stops when robot is upright)
-        selfRight = 1;
-      } else if (IBus.readChannel(3)<1400 && enableControl && !disableControl) { // Sort of kill-switch
-      // Doesn't work perfectly yet. Maybe better to introduce a disableControl flag, which in control loop disables control. 
-        disableControl = 1;
-        selfRight = 0;
-      }
+      remoteControl.selfRight = IBus.readChannel(3)>1600;
+      remoteControl.disableControl = IBus.readChannel(3)<1400 && IBus.readChannel(3)>900;
+
       if (IBus.readChannel(4)>1600) {
         overrideMode = 1;
-      } else if (IBus.readChannel(4)<1400) {
+      } else if (IBus.readChannel(4)<1400 && IBus.readChannel(4)>900) {
         overrideMode = 0;
       }
       // Add similar flag for override. Override needs to be active until selfright is selected, or robot is upright. 
@@ -499,16 +501,31 @@ void loop() {
 
     #ifdef INPUT_PPM
     if (rxData[1] == 0 || rxData[0] == 0) {  // no ppm signal (tx off || rx set to no signal in failsave || no reciever connected (use 100k pulldown))
-      speedInput = 0.0;
-      steerInput = 0.0;
+      remoteControl.speed = 0.0;
+      remoteControl.steer = 0.0;
     } else {  // normal ppm signal
-      speedInput = mapfloat((float)constrain(rxData[1], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * speedFactor;  // Normalise between -100 and 100
-      steerInput = mapfloat((float)constrain(rxData[0], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * steerFactor;
+      remoteControl.speed = mapfloat((float)constrain(rxData[1], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * speedFactor;  // Normalise between -100 and 100
+      remoteControl.steer = mapfloat((float)constrain(rxData[0], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * steerFactor;
     }
     #endif
 
-      avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*speedInput/5.0;
-      avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*steerInput;
+    // Check if self right or disable control command has been given
+    static bool lastSelfRightInput = 0, lastDisableControlInput = 0;
+
+    if (remoteControl.selfRight && !lastSelfRightInput && !enableControl) { // Start self-right action (stops when robot is upright)
+      selfRight = 1;
+      disableControl = 0;
+    } else if (remoteControl.disableControl && !lastDisableControlInput && enableControl ) { // Sort of kill-switch
+      disableControl = 1;
+      selfRight = 0;
+    }
+
+    lastSelfRightInput = remoteControl.selfRight;
+    lastDisableControlInput = remoteControl.disableControl;
+
+    // Filter speed and steer input
+    avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*remoteControl.speed/5.0;
+    avgSteer = steerFilterConstant*avgSteer + (1-steerFilterConstant)*remoteControl.steer;
 
     if (enableControl) {
       // Read receiver inputs
@@ -518,7 +535,7 @@ void loop() {
       // controlMode = (2000-IBus.readChannel(5))/450;
 
       if (abs(avgSpeed)<0.2) {
-        // speedInput = 0;
+        // remoteControl.speed = 0;
       } else {
         lastInputTime = tNowMs;
         if (controlMode==1) {
@@ -601,7 +618,10 @@ void loop() {
         motRight.speed = 0;
         digitalWrite(motEnablePin, 1); // Inverted action on enable pin
       }
-      if (abs(filterAngle)<5 && selfRight) selfRight = 0;
+      if (abs(filterAngle)<5 && selfRight) {
+        selfRight = 0;
+        // remoteControl.selfRight = 0;
+      }
     } else { // Control not active
     
       // Override control
@@ -617,7 +637,10 @@ void loop() {
       }
       lastOverrideMode = overrideMode;
 
-      if (abs(filterAngle)>70) disableControl = 0; // Disable action is completed if robot has fallen down
+      if (abs(filterAngle)>70) {
+        disableControl = 0; // Disable action is completed if robot has fallen down
+        // remoteControl.disableControl = 0;
+      }
 
       if (abs(filterAngle)<5 || selfRight) { // (re-)enable and reset stuff
         enableControl = 1;
@@ -703,13 +726,15 @@ void loop() {
     }
     k++;
 
-    // for (uint8_t i=0; i<6; i++) {
-    //   Serial << IBus.readChannel(i) << "\t";
-    // }
-    Serial << filterAngle << "\t";
+    Serial << IBus.isActive() << "\t";
+    for (uint8_t i=0; i<6; i++) {
+      Serial << IBus.readChannel(i) << "\t";
+    }
+    Serial << remoteControl.speed << "\t"  << remoteControl.steer << "\t"  << remoteControl.selfRight << "\t"  << remoteControl.disableControl;
+    // Serial << filterAngle << "\t";
 
-    Serial << selfRight;
-    // Serial << speedInput << "\t" << steerInput << endl;
+    // Serial << selfRight;
+    // Serial << remoteControl.speed << "\t" << remoteControl.steer << endl;
 
     // Serial << microStep << "\t" << absSpeed << "\t" << endl;
 
@@ -996,7 +1021,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             if (length==6) {
               cmd c;
               memcpy(c.arr, payload, 6);
-            //   Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
+              Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
             //
             //   if (c.grp<parList::groupCounter) {
             //     if (c.grp==0 && c.cmd<100) {
@@ -1015,11 +1040,25 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             //     }
             //   } else if (c.grp==100) {
               if (c.grp==100) {
-                if (c.cmd==0) {
-                  speedInput = c.val;
-                } else if (c.cmd==1) {
-                  steerInput = c.val;
+                switch (c.cmd) {
+                  case 0:
+                    remoteControl.speed = c.val;
+                    break;
+                  case 1:
+                    remoteControl.steer = c.val;
+                    break;
+                  case 2:
+                    remoteControl.selfRight = 1;
+                    break;
+                  case 3:
+                    remoteControl.disableControl = 1;
+                    break;
                 }
+                // if (c.cmd==0) {
+                //   remoteControl.speed = c.val;
+                // } else if (c.cmd==1) {
+                //   remoteControl.steer = c.val;
+                // }
               }
             }
 

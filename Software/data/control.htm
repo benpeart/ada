@@ -35,7 +35,7 @@ function sendCommand(grp, cmd, val) {
   dv.setUint8(0,grp);
   dv.setUint8(1,cmd);
   dv.setFloat32(2,val,true);
-  // console.log(buf);
+  console.log(buf);
   connection.send(buf);
 }
 
@@ -88,7 +88,9 @@ input[type=range]:focus::-webkit-slider-runnable-track {
 
 <body>
 <input type="range" min="-100" max="100" step="1" oninput="sendCommand(100,0,this.value)"  onmouseup="resetValue(this,100,0)" ontouchend="resetValue(this,100,0)" style="transform:rotate(270deg);">
-<input type="range" min="-100" max="100" step="1" oninput="sendCommand(100,1,this.value)" onmouseup="resetValue(this,100,1)"  ontouchend="resetValue(this,100,1)"><br />
+<input type="range" min="-100" max="100" step="1" oninput="sendCommand(100,1,this.value)" onmouseup="resetValue(this,100,1)"  ontouchend="resetValue(this,100,1)">
+<button type="button" onclick="sendCommand(100,2,0)" style="height:100px;width:100px">Self right</button>
+<button type="button" onclick="sendCommand(100,3,0)" style="height:100px;width:100px">Disable</button><br />
 <label id="lbl">a</label>
 
 </body>
