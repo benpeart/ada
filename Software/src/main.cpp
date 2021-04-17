@@ -484,8 +484,16 @@ void loop() {
       remoteControl.speed = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
       remoteControl.steer = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
 
-      remoteControl.selfRight = IBus.readChannel(3)>1600;
-      remoteControl.disableControl = IBus.readChannel(3)<1400 && IBus.readChannel(3)>900;
+      // Edge detection
+      bool selfRightInput = IBus.readChannel(3)>1600 && IBus.readChannel(3)<2100;
+      bool disableControlInput = IBus.readChannel(3)<1400 && IBus.readChannel(3)>900;
+      static bool lastSelfRightInput = 0, lastDisableControlInput = 0;
+
+      remoteControl.selfRight = selfRightInput && !lastSelfRightInput;
+      remoteControl.disableControl = disableControlInput && !lastDisableControlInput;
+
+      lastSelfRightInput = selfRightInput;
+      lastDisableControlInput = disableControlInput;
 
       if (IBus.readChannel(4)>1600) {
         overrideMode = 1;
@@ -509,19 +517,16 @@ void loop() {
     }
     #endif
 
-    // Check if self right or disable control command has been given
-    static bool lastSelfRightInput = 0, lastDisableControlInput = 0;
 
-    if (remoteControl.selfRight && !lastSelfRightInput && !enableControl) { // Start self-right action (stops when robot is upright)
+    if (remoteControl.selfRight && !enableControl) { // Start self-right action (stops when robot is upright)
       selfRight = 1;
       disableControl = 0;
-    } else if (remoteControl.disableControl && !lastDisableControlInput && enableControl ) { // Sort of kill-switch
+      remoteControl.selfRight = 0; // Reset single action bool
+    } else if (remoteControl.disableControl && enableControl ) { // Sort of kill-switch
       disableControl = 1;
       selfRight = 0;
+      remoteControl.disableControl = 0;
     }
-
-    lastSelfRightInput = remoteControl.selfRight;
-    lastDisableControlInput = remoteControl.disableControl;
 
     // Filter speed and steer input
     avgSpeed = speedFilterConstant*avgSpeed + (1-speedFilterConstant)*remoteControl.speed/5.0;
@@ -620,7 +625,6 @@ void loop() {
       }
       if (abs(filterAngle)<5 && selfRight) {
         selfRight = 0;
-        // remoteControl.selfRight = 0;
       }
     } else { // Control not active
     
@@ -639,10 +643,9 @@ void loop() {
 
       if (abs(filterAngle)>70) {
         disableControl = 0; // Disable action is completed if robot has fallen down
-        // remoteControl.disableControl = 0;
       }
 
-      if (abs(filterAngle)<5 || selfRight) { // (re-)enable and reset stuff
+      if ((abs(filterAngle)<5 || selfRight) && !disableControl) { // (re-)enable and reset stuff
         enableControl = 1;
 
         controlMode = 1;
