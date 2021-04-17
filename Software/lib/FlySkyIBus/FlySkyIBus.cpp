@@ -32,7 +32,6 @@ void FlySkyIBus::loop(void)
 {
   while (stream->available() > 0)
   {
-    active = 1;
     uint32_t now = millis();
     if (state==DISCARD && now - last >= PROTOCOL_TIMEGAP)
     {
@@ -79,6 +78,7 @@ void FlySkyIBus::loop(void)
         // Validate checksum
         if (chksum == (v << 8) + lchksum)
         {
+          active = 1; // By now we're pretty sure the receiver is active
           // Execute command - we only know command 0x40
           switch (buffer[0])
           {

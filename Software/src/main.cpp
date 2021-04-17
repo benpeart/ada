@@ -500,10 +500,6 @@ void loop() {
       } else if (IBus.readChannel(4)<1400 && IBus.readChannel(4)>900) {
         overrideMode = 0;
       }
-      // Add similar flag for override. Override needs to be active until selfright is selected, or robot is upright. 
-      // Add control for expert/beginner mode (or use turning knob)
-      // Implement controls in web interface. 
-      // How to detect if selfright is not working? Slip detection needed! If motors are moving / accelerating (there's an error in PID) and angle is not really moving, there's slip. 
     }
     #endif
 
