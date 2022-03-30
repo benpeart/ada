@@ -32,6 +32,8 @@ Also, you have to publish all modifications.
 #include <fastStepper.h>
 // #include <par.h>
 #include <Preferences.h>  // for storing settings
+#include <Ps3Controller.h>
+
 
 // ----- Input method
 
@@ -444,6 +446,9 @@ void setup() {
 
   Serial.println("Ready");
 
+  
+  Ps3.begin("24:0a:c4:31:3d:86");
+
 }
 
 
@@ -751,6 +756,22 @@ void loop() {
     IBus.loop();
     #endif
     wsServer.loop();
+
+    // Handle PS3 controller
+    if(Ps3.isConnected()) {
+      // if( abs(Ps3.event.analog_changed.stick.rx) + abs(Ps3.event.analog_changed.stick.ry) > 2 ){
+        remoteControl.speed = -1*Ps3.data.analog.stick.ry/5.0;
+        remoteControl.steer = Ps3.data.analog.stick.rx/4.0;
+      // }
+
+      if (Ps3.event.button_down.circle) {
+        remoteControl.selfRight = 1;
+      } 
+
+      if (Ps3.event.button_down.cross) {
+        remoteControl.disableControl = 1;
+      } 
+    }
 
     // Serial << micros()-tNow << endl;
   }
