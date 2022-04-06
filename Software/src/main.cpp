@@ -33,6 +33,9 @@ Also, you have to publish all modifications.
 // #include <par.h>
 #include <Preferences.h>  // for storing settings
 #include <Ps3Controller.h>
+#include <esp_bt_main.h>
+#include <esp_bt_defs.h>
+#include  "esp_bt_device.h"
 
 
 // ----- Input method
@@ -52,6 +55,7 @@ float steerFilterConstant = 0.9;  // how fast it reacts to inputs, higher = soft
 
 // FlySkyIBus signal containing 8 RC-Channels in 1 PIN ("RX" on board)
 #define INPUT_IBUS
+
 
 // ----- Type definitions
 typedef union {
@@ -81,11 +85,28 @@ struct {
   uint8_t prescaler = 4;
 } plot;
 
+/* Remote control structure
+Every remote should give a speed and steer command from -100 ... 100
+To adjust "driving experience", e.g. a slow beginners mode, or a fast expert mode, 
+a gain can be adjusted for the speed and steer inputs.
+Additionaly, a selfRight input can be used. When setting this bit to 1, 
+the robot will enable control in an attempt to self right. 
+The override input can be used to control the robot when it is lying flat. 
+The robot will switch automatically from override to balancing mode, if it happens to right itself.
+The disable control input can be used to 
+1) disable the balancing mode
+2) disable the self-right attempt
+3) disable the override mode
+Depending on which state the robot is in.
+*/
 struct {
   float speed = 0;
   float steer = 0;
+  float speedGain = 0.1;
+  float steerGain = 0.25;
   bool selfRight = 0;
   bool disableControl = 0;
+  bool override = 0; 
 } remoteControl;
 
 #define FORMAT_SPIFFS_IF_FAILED true
@@ -100,6 +121,9 @@ void initSensor(uint8_t n);
 void setMicroStep(uint8_t uStep);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
 void sendConfigurationData(uint8_t num);
+void onPs3Notify(); 
+void onPs3Connect(); 
+void onPs3Disconnect(); 
 
 void IRAM_ATTR motLeftTimerFunction();
 void IRAM_ATTR motRightTimerFunction();
@@ -159,7 +183,7 @@ float gyroGain = 1.0;
 float rxg, ayg, azg;
 
 // -- Others
-#define ledPin 2
+#define PIN_LED 32
 #define motorCurrentPin 25
 #define battVoltagePin 34
 
@@ -283,8 +307,8 @@ void setup() {
   digitalWrite(motEnablePin, 1); // Disable steppers during startup
   setMicroStep(microStep);
 
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, 0);
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED, 0);
 
   motLeft.init();
   motRight.init();
@@ -444,10 +468,20 @@ void setup() {
   //                   NULL,       /* Task handle. */
   //                   0);  /* Core where the task should run */
 
+
+  // Setup PS3 controller
+  // Ps3.begin("24:0a:c4:31:3d:86");
+  Ps3.attach(onPs3Notify);
+  Ps3.attachOnConnect(onPs3Connect);
+  Ps3.attachOnDisconnect(onPs3Disconnect);
+  String address = Ps3.getAddress();
+  Serial.print("Bluetooth MAC address: ");
+  Serial.println(address);
+  Ps3.begin();
+
   Serial.println("Ready");
 
   
-  Ps3.begin("24:0a:c4:31:3d:86");
 
 }
 
@@ -486,8 +520,8 @@ void loop() {
     // Read receiver inputs
     #ifdef INPUT_IBUS
     if (IBus.isActive()) { // Check if receiver is active
-      remoteControl.speed = ((float) IBus.readChannel(1)-1500)/5.0 * speedFactor; // Normalise between -100 and 100
-      remoteControl.steer = ((float) IBus.readChannel(0)-1500)/5.0 * steerFactor;
+      remoteControl.speed = ((float) IBus.readChannel(1)-1500)/5.0 * remoteControl.speedGain; // Normalise between -100 and 100
+      remoteControl.steer = ((float) IBus.readChannel(0)-1500)/5.0 * remoteControl.steerGain;
 
       // Edge detection
       bool selfRightInput = IBus.readChannel(3)>1600 && IBus.readChannel(3)<2100;
@@ -513,8 +547,8 @@ void loop() {
       remoteControl.speed = 0.0;
       remoteControl.steer = 0.0;
     } else {  // normal ppm signal
-      remoteControl.speed = mapfloat((float)constrain(rxData[1], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * speedFactor;  // Normalise between -100 and 100
-      remoteControl.steer = mapfloat((float)constrain(rxData[0], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * steerFactor;
+      remoteControl.speed = mapfloat((float)constrain(rxData[1], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * remoteControl.speedGain;  // Normalise between -100 and 100
+      remoteControl.steer = mapfloat((float)constrain(rxData[0], minPPM, maxPPM), (float)minPPM, (float)maxPPM, -100.0, 100.0) * remoteControl.steerGain;
     }
     #endif
 
@@ -759,18 +793,10 @@ void loop() {
 
     // Handle PS3 controller
     if(Ps3.isConnected()) {
-      // if( abs(Ps3.event.analog_changed.stick.rx) + abs(Ps3.event.analog_changed.stick.ry) > 2 ){
-        remoteControl.speed = -1*Ps3.data.analog.stick.ry/5.0;
-        remoteControl.steer = Ps3.data.analog.stick.rx/4.0;
-      // }
-
-      if (Ps3.event.button_down.circle) {
-        remoteControl.selfRight = 1;
-      } 
-
-      if (Ps3.event.button_down.cross) {
-        remoteControl.disableControl = 1;
-      } 
+      // PS3 input range is -127 ... 127
+      remoteControl.speed = -1*Ps3.data.analog.stick.ry/1.27 * remoteControl.speedGain;
+      remoteControl.steer = Ps3.data.analog.stick.rx/1.27 * remoteControl.steerGain;
+      // Other PS3 inputs are read in a separate interrupt function
     }
 
     // Serial << micros()-tNow << endl;
@@ -1158,3 +1184,37 @@ void sendConfigurationData(uint8_t num) {
   sprintf(wBuf, "ws%s", buf);
   wsServer.sendTXT(num, wBuf);
 }
+
+void onPs3Notify() {
+  if (Ps3.event.button_down.down) {
+    remoteControl.speedGain = 0.05;
+    remoteControl.steerGain = 0.15;
+  }
+  if (Ps3.event.button_down.left) {
+    remoteControl.speedGain = 0.1;
+    remoteControl.steerGain = 0.25;
+  }
+  if (Ps3.event.button_down.up) {
+    remoteControl.speedGain = 0.25;
+    remoteControl.steerGain = 0.4;
+  }
+  if (Ps3.event.button_down.right) {
+    remoteControl.speedGain = 0.5;
+    remoteControl.steerGain = 0.5;
+  }
+  if (Ps3.event.button_down.circle)   remoteControl.selfRight = 1;
+  if (Ps3.event.button_down.cross)    remoteControl.disableControl = 1;
+  if (Ps3.event.button_down.square)   remoteControl.override = 1;
+}
+
+void onPs3Connect() {
+  digitalWrite(PIN_LED, 1);
+}
+
+void onPs3Disconnect() {
+  digitalWrite(PIN_LED, 0);
+  remoteControl.speed = 0;
+  remoteControl.steer = 0;
+  remoteControl.speedGain = 1;
+  remoteControl.steerGain = 1;
+} 
