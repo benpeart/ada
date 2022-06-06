@@ -185,7 +185,9 @@ float rxg, ayg, azg;
 // -- Others
 #define PIN_LED 32
 #define motorCurrentPin 25
-#define battVoltagePin 34
+#define PIN_BATTERY_VOLTAGE 34
+#define BATTERY_VOLTAGE_SCALING_FACTOR 3.3/(100+3.3)
+#define BATTERY_VOLTAGE_FILTER_COEFFICIENT 0.99
 
 // -- WiFi
 const char host[] = "balancingrobot";
@@ -325,7 +327,7 @@ void setup() {
 
   // Gyro setup
   delay(200);
-  Wire.begin(21,22,400000);
+  Wire.begin((int) 21, (int) 22, (uint32_t) 400000);
   imu.initialize();
   imu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
   // Calculate and store gyro offsets
@@ -725,7 +727,19 @@ void loop() {
     // updateStepper(&motLeft);
     // updateStepper(&motRight);
 
-    avgBatteryVoltage = avgBatteryVoltage*0.995 + analogRead(battVoltagePin)*0.0293*0.005;
+    // Measure battery voltage, and send to connected client(s), if any
+    avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + analogRead(PIN_BATTERY_VOLTAGE)*BATTERY_VOLTAGE_SCALING_FACTOR*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
+    Serial << avgBatteryVoltage; 
+    static unsigned long tLastBattery;
+    if (tNowMs - tLastBattery > 1000) {
+      if (wsServer.connectedClients(0)>0) {
+        char wBuf[10];
+        
+        sprintf(wBuf, "b%.4f", avgBatteryVoltage);
+        wsServer.broadcastTXT(wBuf);
+      }
+      tLastBattery = tNowMs;
+    }
 
     if (k==plot.prescaler) {
       k = 0;
@@ -764,10 +778,10 @@ void loop() {
     }
     k++;
 
-    Serial << IBus.isActive() << "\t";
-    for (uint8_t i=0; i<6; i++) {
-      Serial << IBus.readChannel(i) << "\t";
-    }
+    // Serial << IBus.isActive() << "\t";
+    // for (uint8_t i=0; i<6; i++) {
+    //   Serial << IBus.readChannel(i) << "\t";
+    // }
     Serial << remoteControl.speed << "\t"  << remoteControl.steer << "\t"  << remoteControl.selfRight << "\t"  << remoteControl.disableControl;
     // Serial << filterAngle << "\t";
 
