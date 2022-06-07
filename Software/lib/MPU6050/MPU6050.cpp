@@ -53,10 +53,15 @@ MPU6050::MPU6050(uint8_t address):devAddr(address) {
  * the default internal clock source.
  */
 void MPU6050::initialize() {
+    Serial.println("a1");
     setClockSource(MPU6050_CLOCK_PLL_XGYRO);
+    Serial.println("a2");
     setFullScaleGyroRange(MPU6050_GYRO_FS_250);
+    Serial.println("a3");
     setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
+    Serial.println("a4");
     setSleepEnabled(false); // thanks to Jack Elston for pointing this one out!
+    Serial.println("a5");
 }
 
 /** Verify the I2C connection.

@@ -33,10 +33,6 @@ Also, you have to publish all modifications.
 // #include <par.h>
 #include <Preferences.h>  // for storing settings
 #include <Ps3Controller.h>
-#include <esp_bt_main.h>
-#include <esp_bt_defs.h>
-#include  "esp_bt_device.h"
-
 
 // ----- Input method
 
@@ -49,13 +45,14 @@ float steerFilterConstant = 0.9;  // how fast it reacts to inputs, higher = soft
 // PPM (called CPPM, PPM-SUM) signal containing 8 RC-Channels in 1 PIN ("RX" on board)
 // Channel 1 = steer, Channel 2 = speed
 // #define INPUT_PPM
-#define PPM_PIN 16  // GPIO-Number
-#define minPPM 990  // minimum PPM-Value (Stick down)
-#define maxPPM 2015  // maximum PPM-Value (Stick up)
+// #define PPM_PIN 16  // GPIO-Number
+// #define minPPM 990  // minimum PPM-Value (Stick down)
+// #define maxPPM 2015  // maximum PPM-Value (Stick up)
 
 // FlySkyIBus signal containing 8 RC-Channels in 1 PIN ("RX" on board)
 #define INPUT_IBUS
 
+// #define INPUT_PS3 // PS3 controller via bluetooth. Dependencies take up quite some program space!
 
 // ----- Type definitions
 typedef union {
@@ -121,9 +118,11 @@ void initSensor(uint8_t n);
 void setMicroStep(uint8_t uStep);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
 void sendConfigurationData(uint8_t num);
-void onPs3Notify(); 
-void onPs3Connect(); 
-void onPs3Disconnect(); 
+#ifdef INPUT_PS3
+  void onPs3Notify(); 
+  void onPs3Connect(); 
+  void onPs3Disconnect(); 
+#endif
 
 void IRAM_ATTR motLeftTimerFunction();
 void IRAM_ATTR motRightTimerFunction();
@@ -186,7 +185,8 @@ float rxg, ayg, azg;
 #define PIN_LED 32
 #define motorCurrentPin 25
 #define PIN_BATTERY_VOLTAGE 34
-#define BATTERY_VOLTAGE_SCALING_FACTOR 3.3/(100+3.3)
+// Battery voltage is measured via a 100 and 3.3 kOhm resistor divider 
+#define BATTERY_VOLTAGE_SCALING_FACTOR 3.3 / 1024.0 / (3.3/(100+3.3)) 
 #define BATTERY_VOLTAGE_FILTER_COEFFICIENT 0.99
 
 // -- WiFi
@@ -327,7 +327,9 @@ void setup() {
 
   // Gyro setup
   delay(200);
-  Wire.begin((int) 21, (int) 22, (uint32_t) 400000);
+  Wire.begin(21, 22, 400000UL);
+  delay(100);
+  Serial.println(imu.testConnection());
   imu.initialize();
   imu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
   // Calculate and store gyro offsets
@@ -472,6 +474,7 @@ void setup() {
 
 
   // Setup PS3 controller
+  #ifdef INPUT_PS3
   // Ps3.begin("24:0a:c4:31:3d:86");
   Ps3.attach(onPs3Notify);
   Ps3.attachOnConnect(onPs3Connect);
@@ -480,6 +483,7 @@ void setup() {
   Serial.print("Bluetooth MAC address: ");
   Serial.println(address);
   Ps3.begin();
+  #endif
 
   Serial.println("Ready");
 
@@ -728,8 +732,9 @@ void loop() {
     // updateStepper(&motRight);
 
     // Measure battery voltage, and send to connected client(s), if any
-    avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + analogRead(PIN_BATTERY_VOLTAGE)*BATTERY_VOLTAGE_SCALING_FACTOR*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
-    Serial << avgBatteryVoltage; 
+    float newBatteryVoltage = analogRead(PIN_BATTERY_VOLTAGE)*BATTERY_VOLTAGE_SCALING_FACTOR;
+    avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + newBatteryVoltage*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
+    Serial << newBatteryVoltage << "\t" << avgBatteryVoltage << "\t"; 
     static unsigned long tLastBattery;
     if (tNowMs - tLastBattery > 1000) {
       if (wsServer.connectedClients(0)>0) {
@@ -806,12 +811,14 @@ void loop() {
     wsServer.loop();
 
     // Handle PS3 controller
+    #ifdef INPUT_PS3
     if(Ps3.isConnected()) {
       // PS3 input range is -127 ... 127
       remoteControl.speed = -1*Ps3.data.analog.stick.ry/1.27 * remoteControl.speedGain;
       remoteControl.steer = Ps3.data.analog.stick.rx/1.27 * remoteControl.steerGain;
       // Other PS3 inputs are read in a separate interrupt function
     }
+    #endif
 
     // Serial << micros()-tNow << endl;
   }
@@ -1199,6 +1206,7 @@ void sendConfigurationData(uint8_t num) {
   wsServer.sendTXT(num, wBuf);
 }
 
+#ifdef INPUT_PS3
 void onPs3Notify() {
   if (Ps3.event.button_down.down) {
     remoteControl.speedGain = 0.05;
@@ -1232,3 +1240,4 @@ void onPs3Disconnect() {
   remoteControl.speedGain = 1;
   remoteControl.steerGain = 1;
 } 
+#endif
