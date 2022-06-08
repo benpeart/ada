@@ -54,7 +54,7 @@ float steerFilterConstant = 0.9;  // how fast it reacts to inputs, higher = soft
 // FlySkyIBus signal containing 8 RC-Channels in 1 PIN ("RX" on board)
 #define INPUT_IBUS
 
-// #define INPUT_PS3 // PS3 controller via bluetooth. Dependencies take up quite some program space!
+#define INPUT_PS3 // PS3 controller via bluetooth. Dependencies take up quite some program space!
 
 // ----- Type definitions
 typedef union {
@@ -196,7 +196,8 @@ esp_adc_cal_characteristics_t adc_chars;
 
 // -- WiFi
 // const char host[] = "balancingrobot";
-char robotName[63] = "balancingrobot";
+#define ROBOT_NAME_DEFAULT "balancingrobot"
+char robotName[63] = ROBOT_NAME_DEFAULT;
 
 // Noise source (for system identification)
 boolean noiseSourceEnable = 0;
@@ -366,8 +367,10 @@ void setup() {
   initSensor(50);
 
   // Read robot name
-  // char robotName[63];
   uint32_t len = preferences.getBytes("robot_name", robotName, 63);
+  // strcpy(robotName, ROBOT_NAME_DEFAULT);
+  // preferences.putBytes("robot_name", robotName, 63);
+
   // if (len==0) preferences.putBytes("robot_name", host, 63);
   Serial.println(robotName);
 
@@ -395,8 +398,7 @@ void setup() {
     WiFi.mode(WIFI_AP_STA);
     // WiFi.softAPConfig(apIP, apIP, IPAddress(192,168,178,24));
     WiFi.softAP(robotName, "turboturbo");
-    Serial.print("AP started with IP address: ");
-    Serial.println(WiFi.softAPIP());
+    Serial << "AP named '" << WiFi.softAPSSID() << "' started, IP address: " << WiFi.softAPIP() << endl;
   }
 
   ArduinoOTA.setHostname(robotName);
@@ -816,7 +818,7 @@ void loop() {
     // for (uint8_t i=0; i<6; i++) {
     //   Serial << IBus.readChannel(i) << "\t";
     // }
-    Serial << remoteControl.speed << "\t"  << remoteControl.steer << "\t"  << remoteControl.selfRight << "\t"  << remoteControl.disableControl;
+    // Serial << remoteControl.speed << "\t"  << remoteControl.steer << "\t"  << remoteControl.selfRight << "\t"  << remoteControl.disableControl;
     // Serial << filterAngle << "\t";
 
     // Serial << selfRight;
@@ -824,7 +826,7 @@ void loop() {
 
     // Serial << microStep << "\t" << absSpeed << "\t" << endl;
 
-    Serial << endl;
+    // Serial << endl;
 
     parseSerial();
 
@@ -856,7 +858,7 @@ void loop() {
 }
 
 void parseSerial() {
-  static char serialBuf[10];
+  static char serialBuf[63];
   static uint8_t pos = 0;
   char currentChar;
 
@@ -974,6 +976,7 @@ void parseCommand(char* data, uint8_t length) {
         char cmd2 = data[1];
         char buf[63];
         uint8_t len;
+        
 
         switch (cmd2) {
           case 'r':
@@ -1003,9 +1006,12 @@ void parseCommand(char* data, uint8_t length) {
             len = length-3;
             memcpy(buf, &data[2], len);
             buf[len] = 0;
-            preferences.putBytes("robot_name", buf, 63);
+            if (len>=8) {
+              preferences.putBytes("robot_name", buf, 63);
+            }
             break;
           }
+          Serial.println(buf);
         break;}
     }
   }
