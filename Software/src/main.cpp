@@ -190,12 +190,13 @@ float rxg, ayg, azg;
 // ADC definitions (for reading battery voltage)
 #define ADC_CHANNEL_BATTERY_VOLTAGE ADC1_CHANNEL_6 // GPIO number 34
 // Battery voltage is measured via a 100 and 3.3 kOhm resistor divider. Reference voltage is 1.1 V (if attenuation is set to 0dB)
-#define BATTERY_VOLTAGE_SCALING_FACTOR 3.3/(100+3.3))
+#define BATTERY_VOLTAGE_SCALING_FACTOR (100+3.3)/3.3
 #define BATTERY_VOLTAGE_FILTER_COEFFICIENT 0.99
 esp_adc_cal_characteristics_t adc_chars;
 
 // -- WiFi
-const char host[] = "balancingrobot";
+// const char host[] = "balancingrobot";
+char robotName[63] = "balancingrobot";
 
 // Noise source (for system identification)
 boolean noiseSourceEnable = 0;
@@ -364,6 +365,12 @@ void setup() {
   // Perform initial gyro measurements
   initSensor(50);
 
+  // Read robot name
+  // char robotName[63];
+  uint32_t len = preferences.getBytes("robot_name", robotName, 63);
+  // if (len==0) preferences.putBytes("robot_name", host, 63);
+  Serial.println(robotName);
+
   // Connect to Wifi and setup OTA if known Wifi network cannot be found
   boolean wifiConnected = 0;
   if (preferences.getUInt("wifi_mode", 0)==1) {
@@ -387,12 +394,12 @@ void setup() {
     Serial.println("Starting AP...");
     WiFi.mode(WIFI_AP_STA);
     // WiFi.softAPConfig(apIP, apIP, IPAddress(192,168,178,24));
-    WiFi.softAP("balancingRobot", "turboturbo");
+    WiFi.softAP(robotName, "turboturbo");
     Serial.print("AP started with IP address: ");
     Serial.println(WiFi.softAPIP());
   }
 
-  ArduinoOTA.setHostname(host);
+  ArduinoOTA.setHostname(robotName);
   ArduinoOTA
   .onStart([]() {
     String type;
@@ -420,9 +427,9 @@ void setup() {
   ArduinoOTA.begin();
 
   // Start DNS server
-  if (MDNS.begin(host)) {
+  if (MDNS.begin(robotName)) {
     Serial.print("MDNS responder started, name: ");
-    Serial.println(host);
+    Serial.println(robotName);
   } else {
     Serial.println("Could not start MDNS responder");
   }
@@ -754,11 +761,11 @@ void loop() {
     float newBatteryVoltage = 0; //analogRead(PIN_BATTERY_VOLTAGE);
     uint32_t reading =  adc1_get_raw(ADC_CHANNEL_BATTERY_VOLTAGE);
     uint32_t voltage = esp_adc_cal_raw_to_voltage(reading, &adc_chars);
-    // avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + newBatteryVoltage*BATTERY_VOLTAGE_SCALING_FACTOR*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
-    avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + (voltage/1000.0)*((100+3.3)/3.3)*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
-    Serial << reading << "\t" << voltage << "\t" << newBatteryVoltage << "\t" << avgBatteryVoltage << "\t"; 
+    avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + (voltage/1000.0)*BATTERY_VOLTAGE_SCALING_FACTOR*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
+    
+    // Send battery voltage readout periodically to web page, if any clients are connected
     static unsigned long tLastBattery;
-    if (tNowMs - tLastBattery > 1000) {
+    if (tNowMs - tLastBattery > 5000) {
       if (wsServer.connectedClients(0)>0) {
         char wBuf[10];
         
@@ -992,6 +999,12 @@ void parseCommand(char* data, uint8_t length) {
           case 'm': // WiFi mode (0=AP, 1=use SSID)
             Serial.println(atoi(&data[2]));
             preferences.putUInt("wifi_mode", atoi(&data[2]));
+          case 'n': // Robot name
+            len = length-3;
+            memcpy(buf, &data[2], len);
+            buf[len] = 0;
+            preferences.putBytes("robot_name", buf, 63);
+            break;
           }
         break;}
     }
@@ -1225,6 +1238,8 @@ void sendConfigurationData(uint8_t num) {
   wsServer.sendTXT(num, wBuf);
   preferences.getBytes("wifi_ssid", buf, 63);
   sprintf(wBuf, "ws%s", buf);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "wn%s", robotName);
   wsServer.sendTXT(num, wBuf);
 }
 

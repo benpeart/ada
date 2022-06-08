@@ -91,6 +91,10 @@
         var e = document.getElementById('WifiSSID');
         e.value = str;
         break;
+      case 'n':
+        var e = document.getElementById('wn');
+        e.value = str;
+        break;
       case 'm':
         var e = document.getElementsByName('wm');
         e[parseInt(str)].checked = true;
@@ -181,8 +185,11 @@
 		</fieldset>
 		<fieldset>
 		<legend>Other stuff</legend>
-			Battery voltage<br /><input type="text" id="b" value="" style="width:400px" maxlength="32"><br />
-			Battery voltage is not calibrated; ESP32 ADC is not very precise. It provides an indication though. 
+			Battery voltage: <input type="text" id="b" value="" style="width:40px" maxlength="32"> V<br />
+			Battery voltage is not calibrated; ESP32 ADC is not very precise. It provides an indication though. <br /><br />
+			Robot name (active after reboot)<br /><input type="text" id="wn" value="" style="width:400px" maxlength="32"><br />
+			<button type="button" onclick="sendCommand('wn', document.getElementById('wn').value) ">Save name to EEPROM (Active after Reboot)</button>
+			<button type="button" onclick="sendCommand('wr',1)">Reboot</button>
 		</fieldset>
 	</form>
 </body>
