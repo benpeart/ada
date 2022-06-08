@@ -179,6 +179,11 @@
 			<button type="button" onclick="sendWifiDetails()">Save Wifi to EEPROM (Active after Reboot)</button>
 			<button type="button" onclick="sendCommand('wr',1)">Reboot</button>
 		</fieldset>
+		<fieldset>
+		<legend>Other stuff</legend>
+			Battery voltage<br /><input type="text" id="b" value="" style="width:400px" maxlength="32"><br />
+			Battery voltage is not calibrated; ESP32 ADC is not very precise. It provides an indication though. 
+		</fieldset>
 	</form>
 </body>
 </html>

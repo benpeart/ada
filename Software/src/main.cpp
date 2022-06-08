@@ -33,6 +33,8 @@ Also, you have to publish all modifications.
 // #include <par.h>
 #include <Preferences.h>  // for storing settings
 #include <Ps3Controller.h>
+#include "driver/adc.h"
+#include "esp_adc_cal.h"
 
 // ----- Input method
 
@@ -99,8 +101,8 @@ Depending on which state the robot is in.
 struct {
   float speed = 0;
   float steer = 0;
-  float speedGain = 0.1;
-  float steerGain = 0.25;
+  float speedGain = 0.6;
+  float steerGain = 0.7;
   bool selfRight = 0;
   bool disableControl = 0;
   bool override = 0; 
@@ -183,11 +185,14 @@ float rxg, ayg, azg;
 
 // -- Others
 #define PIN_LED 32
-#define motorCurrentPin 25
-#define PIN_BATTERY_VOLTAGE 34
-// Battery voltage is measured via a 100 and 3.3 kOhm resistor divider 
-#define BATTERY_VOLTAGE_SCALING_FACTOR 3.3 / 1024.0 / (3.3/(100+3.3)) 
+#define PIN_MOTOR_CURRENT 25
+
+// ADC definitions (for reading battery voltage)
+#define ADC_CHANNEL_BATTERY_VOLTAGE ADC1_CHANNEL_6 // GPIO number 34
+// Battery voltage is measured via a 100 and 3.3 kOhm resistor divider. Reference voltage is 1.1 V (if attenuation is set to 0dB)
+#define BATTERY_VOLTAGE_SCALING_FACTOR 3.3/(100+3.3))
 #define BATTERY_VOLTAGE_FILTER_COEFFICIENT 0.99
+esp_adc_cal_characteristics_t adc_chars;
 
 // -- WiFi
 const char host[] = "balancingrobot";
@@ -237,7 +242,7 @@ void IRAM_ATTR motRightTimerFunction() {
 
 
 void setMotorCurrent() {
-  dacWrite(motorCurrentPin, motorCurrent);
+  dacWrite(PIN_MOTOR_CURRENT, motorCurrent);
 }
 
 void sendData(uint8_t *b, uint8_t l) {
@@ -448,7 +453,7 @@ void setup() {
   //   delay(5);
   // }
 
-  dacWrite(motorCurrentPin, motorCurrent);
+  dacWrite(PIN_MOTOR_CURRENT, motorCurrent);
 
   pidAngle.setParameters(0.65,1.0,0.075,15);
   pidPos.setParameters(1,0,1.2,20);
@@ -486,8 +491,22 @@ void setup() {
   #endif
 
   Serial.println("Ready");
-
   
+
+  // Characterize ADC at particular atten
+  esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_0db, ADC_WIDTH_BIT_12, 1100, &adc_chars);
+  if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+      Serial.println("eFuse Vref");
+  } else if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
+      Serial.println("Two Point");
+  } else {
+      Serial.println("Default");
+  }
+  Serial << "ADC calibration values (attenuation, vref, coeff a, coeff b):" << adc_chars.atten << "\t"<< adc_chars.vref << "\t"<< adc_chars.coeff_a << "\t"<< adc_chars.coeff_b << endl;
+
+  // Configure ADC
+  adc1_config_channel_atten(ADC_CHANNEL_BATTERY_VOLTAGE, ADC_ATTEN_0db);
+  adc_set_data_inv(ADC_UNIT_1, true); // For some reason, data is inverted...
 
 }
 
@@ -732,15 +751,18 @@ void loop() {
     // updateStepper(&motRight);
 
     // Measure battery voltage, and send to connected client(s), if any
-    float newBatteryVoltage = analogRead(PIN_BATTERY_VOLTAGE)*BATTERY_VOLTAGE_SCALING_FACTOR;
-    avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + newBatteryVoltage*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
-    Serial << newBatteryVoltage << "\t" << avgBatteryVoltage << "\t"; 
+    float newBatteryVoltage = 0; //analogRead(PIN_BATTERY_VOLTAGE);
+    uint32_t reading =  adc1_get_raw(ADC_CHANNEL_BATTERY_VOLTAGE);
+    uint32_t voltage = esp_adc_cal_raw_to_voltage(reading, &adc_chars);
+    // avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + newBatteryVoltage*BATTERY_VOLTAGE_SCALING_FACTOR*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
+    avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + (voltage/1000.0)*((100+3.3)/3.3)*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
+    Serial << reading << "\t" << voltage << "\t" << newBatteryVoltage << "\t" << avgBatteryVoltage << "\t"; 
     static unsigned long tLastBattery;
     if (tNowMs - tLastBattery > 1000) {
       if (wsServer.connectedClients(0)>0) {
         char wBuf[10];
         
-        sprintf(wBuf, "b%.4f", avgBatteryVoltage);
+        sprintf(wBuf, "b%.1f", avgBatteryVoltage);
         wsServer.broadcastTXT(wBuf);
       }
       tLastBattery = tNowMs;
@@ -884,7 +906,7 @@ void parseCommand(char* data, uint8_t length) {
       case 'v':
         motorCurrent = atof(data+1);
         Serial << motorCurrent << endl;
-        dacWrite(motorCurrentPin, motorCurrent);
+        dacWrite(PIN_MOTOR_CURRENT, motorCurrent);
         break;
       case 'm':
         val2 = atof(data+1);
