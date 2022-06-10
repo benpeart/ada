@@ -517,6 +517,7 @@ void setup() {
   adc1_config_channel_atten(ADC_CHANNEL_BATTERY_VOLTAGE, ADC_ATTEN_0db);
   adc_set_data_inv(ADC_UNIT_1, true); // For some reason, data is inverted...
 
+  Serial.println("Booted, ready for driving!")
 }
 
 
@@ -1274,10 +1275,12 @@ void onPs3Notify() {
 
 void onPs3Connect() {
   digitalWrite(PIN_LED, 1);
+  Serial.println("Bluetooth controller connected");
 }
 
 void onPs3Disconnect() {
   digitalWrite(PIN_LED, 0);
+  Serial.println("Bluetooth controller disconnected");
   remoteControl.speed = 0;
   remoteControl.steer = 0;
   remoteControl.speedGain = 1;
