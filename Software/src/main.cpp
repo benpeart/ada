@@ -465,7 +465,7 @@ void setup() {
   dacWrite(PIN_MOTOR_CURRENT, motorCurrent);
 
   pidAngle.setParameters(0.65,1.0,0.075,15);
-  pidPos.setParameters(1,0,1.2,20);
+  pidPos.setParameters(1,0,1.2,50);
   pidSpeed.setParameters(6,5,0,20);
 
   // pidParList.read();
@@ -517,7 +517,7 @@ void setup() {
   adc1_config_channel_atten(ADC_CHANNEL_BATTERY_VOLTAGE, ADC_ATTEN_0db);
   adc_set_data_inv(ADC_UNIT_1, true); // For some reason, data is inverted...
 
-  Serial.println("Booted, ready for driving!")
+  Serial.println("Booted, ready for driving!");
 }
 
 
