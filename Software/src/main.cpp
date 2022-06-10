@@ -493,10 +493,10 @@ void setup() {
   Ps3.attach(onPs3Notify);
   Ps3.attachOnConnect(onPs3Connect);
   Ps3.attachOnDisconnect(onPs3Disconnect);
+  Ps3.begin();
   String address = Ps3.getAddress();
   Serial.print("Bluetooth MAC address: ");
   Serial.println(address);
-  Ps3.begin();
   #endif
 
   Serial.println("Ready");
