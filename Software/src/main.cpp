@@ -86,13 +86,13 @@ struct {
 
 /* Remote control structure
 Every remote should give a speed and steer command from -100 ... 100
-To adjust "driving experience", e.g. a slow beginners mode, or a fast expert mode, 
+To adjust "driving experience", e.g. a slow beginners mode, or a fast expert mode,
 a gain can be adjusted for the speed and steer inputs.
-Additionaly, a selfRight input can be used. When setting this bit to 1, 
-the robot will enable control in an attempt to self right. 
-The override input can be used to control the robot when it is lying flat. 
+Additionaly, a selfRight input can be used. When setting this bit to 1,
+the robot will enable control in an attempt to self right.
+The override input can be used to control the robot when it is lying flat.
 The robot will switch automatically from override to balancing mode, if it happens to right itself.
-The disable control input can be used to 
+The disable control input can be used to
 1) disable the balancing mode
 2) disable the self-right attempt
 3) disable the override mode
@@ -101,11 +101,12 @@ Depending on which state the robot is in.
 struct {
   float speed = 0;
   float steer = 0;
-  float speedGain = 0.6;
-  float steerGain = 0.7;
+  float speedGain = 0.2;
+  float steerGain = 0.3;
+  float speedOffset = 0.0;
   bool selfRight = 0;
   bool disableControl = 0;
-  bool override = 0; 
+  bool override = 0;
 } remoteControl;
 
 #define FORMAT_SPIFFS_IF_FAILED true
@@ -121,9 +122,9 @@ void setMicroStep(uint8_t uStep);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
 void sendConfigurationData(uint8_t num);
 #ifdef INPUT_PS3
-  void onPs3Notify(); 
-  void onPs3Connect(); 
-  void onPs3Disconnect(); 
+  void onPs3Notify();
+  void onPs3Connect();
+  void onPs3Disconnect();
 #endif
 
 void IRAM_ATTR motLeftTimerFunction();
@@ -273,7 +274,7 @@ volatile int32_t rxData[] = {0,0,0,0,0,0,0,0};
 //int in which the time difference to the last pulse is stored
 volatile uint32_t rxPre = 1;
 //int in which the current channel number to read out is stored
-volatile uint8_t channelNr = 0; 
+volatile uint8_t channelNr = 0;
 //indicates if the data in the channel value array are reliable e.g. there have been two sync breaks, so in the array there are only "real" values synced to the correspondinc channel number
 volatile uint8_t firstRoundCounter = 2;
 volatile boolean firstRoundPassed = false;
@@ -290,7 +291,7 @@ void rxFalling() {  // will be called when the ppm peak is over
     rxData[channelNr] = micros()-rxPre;
     rxPre = micros();
     channelNr++;
-  } 
+  }
   if(!validRxValues) {
     if(firstRoundPassed) {
         validRxValues = true;
@@ -500,7 +501,7 @@ void setup() {
   #endif
 
   Serial.println("Ready");
-  
+
 
   // Characterize ADC at particular atten
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_0db, ADC_WIDTH_BIT_12, 1100, &adc_chars);
@@ -697,7 +698,7 @@ void loop() {
         selfRight = 0;
       }
     } else { // Control not active
-    
+
       // Override control
       if (overrideMode && !lastOverrideMode) { // Transition from disable to enable
         // Enable override mode
@@ -720,7 +721,7 @@ void loop() {
 
         controlMode = 1;
         // avgMotSpeedSum = 0;
-        
+
         if (!overrideMode) {
           avgMotSpeedSum = 0;
           digitalWrite(motEnablePin, 0); // Inverted action on enable pin
@@ -765,13 +766,13 @@ void loop() {
     uint32_t reading =  adc1_get_raw(ADC_CHANNEL_BATTERY_VOLTAGE);
     uint32_t voltage = esp_adc_cal_raw_to_voltage(reading, &adc_chars);
     avgBatteryVoltage = avgBatteryVoltage*BATTERY_VOLTAGE_FILTER_COEFFICIENT + (voltage/1000.0)*BATTERY_VOLTAGE_SCALING_FACTOR*(1-BATTERY_VOLTAGE_FILTER_COEFFICIENT);
-    
+
     // Send battery voltage readout periodically to web page, if any clients are connected
     static unsigned long tLastBattery;
     if (tNowMs - tLastBattery > 5000) {
       if (wsServer.connectedClients(0)>0) {
         char wBuf[10];
-        
+
         sprintf(wBuf, "b%.1f", avgBatteryVoltage);
         wsServer.broadcastTXT(wBuf);
       }
@@ -846,7 +847,7 @@ void loop() {
     #ifdef INPUT_PS3
     if(Ps3.isConnected()) {
       // PS3 input range is -127 ... 127
-      remoteControl.speed = -1*Ps3.data.analog.stick.ry/1.27 * remoteControl.speedGain;
+      remoteControl.speed = -1*Ps3.data.analog.stick.ry/1.27 * remoteControl.speedGain + remoteControl.speedOffset;
       remoteControl.steer = Ps3.data.analog.stick.rx/1.27 * remoteControl.steerGain;
       // Other PS3 inputs are read in a separate interrupt function
     }
@@ -977,7 +978,7 @@ void parseCommand(char* data, uint8_t length) {
         char cmd2 = data[1];
         char buf[63];
         uint8_t len;
-        
+
 
         switch (cmd2) {
           case 'r':
@@ -1254,23 +1255,33 @@ void sendConfigurationData(uint8_t num) {
 void onPs3Notify() {
   if (Ps3.event.button_down.down) {
     remoteControl.speedGain = 0.05;
-    remoteControl.steerGain = 0.15;
+    remoteControl.steerGain = 0.3;
   }
   if (Ps3.event.button_down.left) {
     remoteControl.speedGain = 0.1;
-    remoteControl.steerGain = 0.25;
+    remoteControl.steerGain = 0.6;
   }
   if (Ps3.event.button_down.up) {
-    remoteControl.speedGain = 0.25;
-    remoteControl.steerGain = 0.4;
+    remoteControl.speedGain = 0.2;
+    remoteControl.steerGain = 0.8;
   }
   if (Ps3.event.button_down.right) {
-    remoteControl.speedGain = 0.5;
-    remoteControl.steerGain = 0.5;
+    remoteControl.speedGain = 0.25;
+    remoteControl.steerGain = 1.0;
   }
   if (Ps3.event.button_down.circle)   remoteControl.selfRight = 1;
   if (Ps3.event.button_down.cross)    remoteControl.disableControl = 1;
   if (Ps3.event.button_down.square)   remoteControl.override = 1;
+  if (Ps3.event.button_down.r1) {
+    if (remoteControl.speedOffset < 20.0) {
+      remoteControl.speedOffset += 0.5;
+      }
+   }
+   if (Ps3.event.button_down.r2) {
+     if (remoteControl.speedOffset > -20.0) {
+       remoteControl.speedOffset -= 0.5;
+     }
+   }
 }
 
 void onPs3Connect() {
@@ -1285,5 +1296,5 @@ void onPs3Disconnect() {
   remoteControl.steer = 0;
   remoteControl.speedGain = 1;
   remoteControl.steerGain = 1;
-} 
+}
 #endif
