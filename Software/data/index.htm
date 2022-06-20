@@ -15,13 +15,13 @@
 	<script>
 	var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']);
 	connection.binaryType = 'arraybuffer';
-	connection.onopen = function () {  
+	connection.onopen = function () {
 		<!-- connection.send('Connect ' + new Date());  -->
-	}; 
-	connection.onerror = function (error) {    
+	};
+	connection.onerror = function (error) {
 		console.log('WebSocket Error ', error);
 	};
-	connection.onmessage = function (e) {  
+	connection.onmessage = function (e) {
 	  if (typeof(e.data)=='string') { // Text frame
   		console.log('Server: ', e.data);
   		if (e.data[0]=='c') {
@@ -67,14 +67,14 @@
   function parseWifiCommand(cmdStr) {
     var cmd = cmdStr.substr(0,1);
     var str = cmdStr.substr(1);
-    
+
     switch (cmd) {
       case 'l': // Received list of WiFi networks
         var strSplit = str.split(",");
-        
+
         var select = document.getElementById("SSIDlist");
         var length = select.options.length;
-    
+
         // Remove old options
         for (i = 0; i < length; i++) {
           select.options[i] = null;
@@ -99,6 +99,10 @@
         var e = document.getElementsByName('wm');
         e[parseInt(str)].checked = true;
         break;
+			case 'b':
+				var e = document.getElementById('wb');
+				e.value = str;
+				break;
     }
   }
   function selectWifiFromList(str) {
@@ -187,6 +191,7 @@
 		<legend>Other stuff</legend>
 			Battery voltage: <input type="text" id="b" value="" style="width:40px" maxlength="32"> V<br />
 			Battery voltage is not calibrated; ESP32 ADC is not very precise. It provides an indication though. <br /><br />
+			Robot BT MAC address<br /><input type="text" id="wb" value="" style="width:400px" maxlength="32"><br /><br />
 			Robot name (active after reboot)<br /><input type="text" id="wn" value="" style="width:400px" maxlength="32"><br />
 			<button type="button" onclick="sendCommand('wn', document.getElementById('wn').value) ">Save name to EEPROM (Active after Reboot)</button>
 			<button type="button" onclick="sendCommand('wr',1)">Reboot</button>

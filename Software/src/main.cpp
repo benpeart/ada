@@ -200,6 +200,9 @@ esp_adc_cal_characteristics_t adc_chars;
 #define ROBOT_NAME_DEFAULT "balancingrobot"
 char robotName[63] = ROBOT_NAME_DEFAULT;
 
+// BT MAC
+char BTaddress[20] = "00:00:00:00:00:00";
+
 // Noise source (for system identification)
 boolean noiseSourceEnable = 0;
 float noiseSourceAmplitude = 1;
@@ -496,6 +499,8 @@ void setup() {
   Ps3.attachOnDisconnect(onPs3Disconnect);
   Ps3.begin();
   String address = Ps3.getAddress();
+  int bt_len = address.length() + 1;
+  address.toCharArray(BTaddress, bt_len);
   Serial.print("Bluetooth MAC address: ");
   Serial.println(address);
   #endif
@@ -1004,6 +1009,7 @@ void parseCommand(char* data, uint8_t length) {
           case 'm': // WiFi mode (0=AP, 1=use SSID)
             Serial.println(atoi(&data[2]));
             preferences.putUInt("wifi_mode", atoi(&data[2]));
+            break;
           case 'n': // Robot name
             len = length-3;
             memcpy(buf, &data[2], len);
@@ -1248,6 +1254,8 @@ void sendConfigurationData(uint8_t num) {
   sprintf(wBuf, "ws%s", buf);
   wsServer.sendTXT(num, wBuf);
   sprintf(wBuf, "wn%s", robotName);
+  wsServer.sendTXT(num, wBuf);
+  sprintf(wBuf, "wb%s", BTaddress);
   wsServer.sendTXT(num, wBuf);
 }
 
