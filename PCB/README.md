@@ -69,7 +69,7 @@ Connector J2 has a grid of 12 pins (3x4), with some general pins broken out, tog
 | 12    | AUX6    | D36       |
 
 # BOM
-Applicable for v1.1. v1.0 doesn't have R7.
+Applicable for v1.3. 
 
 | Qty | Reference(s)           | Value                                    |
 |-----|------------------------|------------------------------------------|
