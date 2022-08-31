@@ -169,6 +169,12 @@ PID pidSpeed(cP, dT, PID_POS_MAX, -PID_POS_MAX);
 
 uint8_t controlMode = 1; // 0 = only angle, 1 = angle+position, 2 = angle+speed
 
+// Threshold for fall detection. If integral of error of angle controller is larger than this value, controller is disabled
+#define angleErrorIntegralThreshold 30.0 
+#define angleErrorIntegralThresholdDuringSelfright angleErrorIntegralThreshold*3
+#define angleEnableThreshold 5.0 // If (absolute) robot angle is below this threshold, enable control
+#define angleDisableThreshold 70.0 // If (absolute) robot angle is above this threshold, disable control (robot has fallen down)
+
 // -- IMU
 MPU6050 imu;
 
@@ -552,6 +558,7 @@ void loop() {
   static boolean overrideMode = 0, lastOverrideMode = 0;
   static boolean selfRight = 0;
   static boolean disableControl = 0;
+  static float angleErrorIntegral = 0;
 
   unsigned long tNow = micros();
   tNowMs = millis();
@@ -636,6 +643,7 @@ void loop() {
 
       // }
 
+      // Switch to position control if no input is received for a certain amount of time
       if (tNowMs-lastInputTime>2000 && controlMode == 2) {
         controlMode = 1;
         motLeft.setStep(0);
@@ -643,6 +651,7 @@ void loop() {
         pidPos.reset();
       }
 
+      // Actual controller computations
       if (controlMode == 0) {
         pidAngle.setpoint = avgSpeed*2;
       } else if (controlMode == 1) {
@@ -679,6 +688,21 @@ void loop() {
       motLeft.speed = avgMotSpeed + steer;
       motRight.speed = avgMotSpeed - steer;
 
+      // Detect if robot has fallen. Concept: integrate angle controller error over time. 
+      // If absolute integrated error surpasses threshold, disable controller
+      angleErrorIntegral += (pidAngle.setpoint - pidAngle.input) * dT;
+      // if (selfRight) {
+      //   if (abs(angleErrorIntegral) > angleErrorIntegralThresholdDuringSelfright) {
+      //     selfRight = 0;
+      //     disableControl = 1;
+      //   }
+      // } else {
+      //   if (abs(angleErrorIntegral) > angleErrorIntegralThreshold) {
+      //     disableControl = 1;
+      //   }
+      // }
+
+
       // Switch microstepping
       absSpeed = abs(avgMotSpeed);
       uint8_t lastMicroStep = microStep;
@@ -693,13 +717,14 @@ void loop() {
       // }
 
       // Disable control if robot is almost horizontal. Re-enable if upright.
-      if ((abs(filterAngle)>70 && !selfRight) || disableControl) {
+      if ((abs(filterAngle)>angleDisableThreshold && !selfRight) || disableControl) {
         enableControl = 0;
+        // disableControl = 0; // Reset disableControl flag
         motLeft.speed = 0;
         motRight.speed = 0;
         digitalWrite(motEnablePin, 1); // Inverted action on enable pin
       }
-      if (abs(filterAngle)<5 && selfRight) {
+      if (abs(filterAngle)<angleEnableThreshold && selfRight) {
         selfRight = 0;
       }
     } else { // Control not active
@@ -717,11 +742,11 @@ void loop() {
       }
       lastOverrideMode = overrideMode;
 
-      if (abs(filterAngle)>70) {
-        disableControl = 0; // Disable action is completed if robot has fallen down
+      if (abs(filterAngle)>angleEnableThreshold+5) { // Only reset disableControl flag if angle is out of "enable" zone, otherwise robot will keep cycling between enable and disable states
+        disableControl = 0; 
       }
 
-      if ((abs(filterAngle)<5 || selfRight) && !disableControl) { // (re-)enable and reset stuff
+      if ((abs(filterAngle)<angleEnableThreshold || selfRight) && !disableControl) { // (re-)enable and reset stuff
         enableControl = 1;
 
         controlMode = 1;
@@ -740,6 +765,8 @@ void loop() {
         motRight.setStep(0);
         pidPos.reset();
         pidSpeed.reset();
+        
+        angleErrorIntegral = 0;
         // delay(1);
       }
 
