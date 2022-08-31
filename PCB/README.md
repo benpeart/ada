@@ -16,8 +16,8 @@ This folder contains KiCad (5.0.0) design files for the BalancingRobot PCB.
 * Websocket communication for real-time communication between ESP32 and browser
 * Web interface via access point / WiFi network. SSID and key can be set via web interface.
 
-![Top side](/PCB/pictures/pcb_v1-1_top.png)
-![Top side](/PCB/pictures/pcb_v1-1_bottom.png)
+![Top side](/PCB/pictures/pcb_v1-3_top.png)
+![Bottom side](/PCB/pictures/pcb_v1-3_bottom.png)
 
 # Assembly
 Assembly is quite straightforward. For those who like some instructions, here goes. For the ones that don't like to follow instructions: that's ok, but please read the last instruction about adjusting the buck converter voltage.
@@ -51,7 +51,6 @@ For better performance, you can tie the decay mode pin of the DRV8825 to VCC, se
 ## Auxiliary header
 Connector J2 has a grid of 12 pins (3x4), with some general pins broken out, together with all unused ESP32 IO pins. See the close-up of the header below. Pin numbering in this picture is used in the table below to identify pins.
 
-//![Auxiliary header pinout](/PCB/pictures/auxHeader.PNG)
 <img src="/PCB/pictures/auxHeader.PNG" width="400" />
 
 | Pin # | Name    | ESP32 pin |
@@ -78,6 +77,10 @@ Applicable for v1.1. v1.0 doesn't have R7.
 | 2   | C1, C3                 | 1u capacitor, 0805 SMD                   |
 | 2   | C2, C4                 | 100u elco                                |
 | 1   | C5                     | 100n capacitor, not placed               |
+| 1   | C6                     | elco, not placed (e.g. for Neopixels)    |
+| 1   | C7 	                   | 10uF 50V 1206, only placed if U4 is used |
+| 1   | C8 	                   | 22uF 10V 0805, only placed if U4 is used |
+| 2   | D1, D2 	               | 5mm LED, optional  					  |
 | 1   | F1                     | Polyfuse                                 |
 | 1   | J1                     | Female header, cut to size               |
 | 1   | J2                     | N/A, solder whatever you like here       |
@@ -89,6 +92,9 @@ Applicable for v1.1. v1.0 doesn't have R7.
 | 1   | U1                     | ESP32 devKit module, 30 pins             |
 | 1   | U2                     | MPU6050 breakout, 8 pins                 |
 | 1   | U3                     | Buck converter module                    |
+| 1   | U4                     | Switching regulator 7805 compatible      |
+
+Note: for U3, U4 place either of the two. I added two footprints to maximize compatibility. Examples for U4: MP-K7805-500R3, Recom r-78e5.0-0.5, MP-K78L05-1000R3
 
 Additionally, you'll need a pair of 8 pin male/female angled headers, for mounting the IMU. For mounting the ESP32 and stepper driver modules, you'll need 2 times 15 and 16 pin female headers (4 in total).
 
@@ -114,4 +120,13 @@ Initial version
 * Added optional 5V filtering cap (might be useful if for example some Neopixels are connected to 5V line)
 * Added some markings for the buck converter, clarifying the mounting direction
 * Added connections for (fused) battery voltage (J6)
+## v1.3 Aug 2022
+* Added power switch
+* Added JST XH connector for battery
+* Added LEDs. Can be used as status indicators, or "eyes"
+* Increased PCB size to accomodate for the above
+* Changed mounting hole location, such that they are not under the modules
+* Changed SMD resistors from hand soldering to normal (reflow)
+* Added 7805 pin compatible converter and decoupling capacitors
+
 
