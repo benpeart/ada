@@ -89,6 +89,7 @@ Applicable for v1.3.
 | 1   | J5                     | Male header, cut to size                 |
 | 6   | R1, R2, R3, R4, R6, R7 | 3k3 resistor, 0805 SMD                   |
 | 1   | R5                     | 100k resistor, 0805 SMD                  |
+| 1   | SW1                    | (slider) switch, I use SS12D10           |
 | 1   | U1                     | ESP32 devKit module, 30 pins             |
 | 1   | U2                     | MPU6050 breakout, 8 pins                 |
 | 1   | U3                     | Buck converter module                    |
@@ -103,6 +104,7 @@ Some examples of the modules:
 * [DRV8825 stepper driver](https://www.aliexpress.com/item/Free-shipping-10pcs-lot-3D-Printer-StepStick-DRV8825-Stepper-Motor-Drive-Carrier-Reprap-4-layer-PCB/32292074706.html?spm=a2g0s.9042311.0.0.26604c4dM62q0I)
 * [MPU6050 IMU](http://www.aliexpress.com/item/GY-521-MPU-6050-MPU6050-Module-3-Axis-analog-gyro-sensors-3-Axis-Accelerometer-Module/32340949017.html?spm=a2g0s.9042311.0.0.26604c4dM62q0I)
 * [Buck converter](https://www.aliexpress.com/item/10PCS-Mini-3A-DC-DC-Converter-Step-Down-Module-Adjustable-3V-5V-16V-Power-for-RC/32639738406.html?spm=a2g0s.9042311.0.0.66ef4c4duolobi)
+* [Power switch](https://www.aliexpress.com/item/1005003079561856.html?spm=a2g0o.order_list.0.0.46e418027JRX4A)
 
 # Issues
 For PCB version 1.0, the + and - signs of the RX/Servo/LED indicator are swapped. The pinout is correct though. To be clear, the order (from right to left) is -, +, and signal. This has been solved in v1.1.
