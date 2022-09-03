@@ -20,9 +20,9 @@ files = dir([dataPath, '*.csv']);
 fileNames = {files.name}.';
 
 %% Read .csv file
-file = fileNames{9};
-file = fileNames{10};
-% file = fileNames{11};
+file = fileNames{9}; fileDescription = 'Driving and falling, no step loss';
+file = fileNames{10}; fileDescription = 'Driving and forcing step loss';
+file = fileNames{11}; fileDescription = 'Standing without interaction';
 dRaw = csvread([dataPath, file], 1, 0);
 
 t = dRaw(:,1) - dRaw(1,1);
@@ -31,7 +31,7 @@ d = cell2struct(num2cell(dRaw(:,2:end),1), fieldNames,2);
 dT = mean(diff(t));
 Fs = 1/dT;
 
-errorIntThreshold = 20;
+errorIntThreshold = 30;
 
 % Plot some time domain data
 setpoint = d.setpoint1;

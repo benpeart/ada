@@ -2,7 +2,7 @@
 This folder contains KiCad (5.0.0) design files for the BalancingRobot PCB. 
 
 # Features
-* Supports both DRV8825 and A4988 based stepper drivers. Should also be compatible with TMC2100 (with settings configurable via ESP32), not tested yet though.
+* Supports both DRV8825 and A4988 based stepper drivers. Also works with TMC2100, resulting in a very silent robot
 * Supported voltage: ~7 - 24V (2-6S LiPo/Li-ion)
 * Digital current control of steppers (you'll need to desolder the potmeter and add a wire)
 * Dynamic microstep switching, allowing for insane speeds
