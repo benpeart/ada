@@ -11,8 +11,11 @@ For Software Setup see [Software/README.md](Software/README.md)
 Please be aware that this code is very experimental / far from complete. So, you'll probably have to implement some stuff yourself. Also, use at your own risk.
 
 ### Branches
-- master: old and stable version
-- devel: new version with lots of new features (recommended)
+- master: stable version
+- devel: experimental features, use at your own risk
+- ps3control: more experimental features. It includes compatibility with a PS3 controller, self righting, and fall detection. I'd personally recommend this one as it is most often updated.
+
+I'll try to merge all the branches at some point...
 
 # General instructions
 
