@@ -13,6 +13,8 @@ Please be aware that this code is very experimental / far from complete. So, you
 ### Branches
 - master: stable version
 - devel: experimental features, use at your own risk
+- ps3control: more experimental features. It includes compatibility with a PS3 controller, self righting, and fall detection. 
+I'll try to merge all the branches at some point...
 
 # General instructions
 
