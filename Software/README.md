@@ -1,7 +1,7 @@
 This folder contains the software source files, written for an ESP32 using the Arduino framework. PlatformIO is used as environment, as it is very easy to use, and provides somewhat more advanced functions, compared to the very basic Arduino IDE. 
 
 # Build environment
-For setting up PlatformIO, see https://docs.platformio.org/en/latest/ide/atom.html or https://docs.platformio.org/en/latest/ide/vscode.html. I use Atom myself, but both IDEs will work fine. 
+For setting up PlatformIO, see https://docs.platformio.org/en/latest/ide/vscode.html. 
 
 Clone the repository. I strongly advice to not download the source files as a zip package, but to use Git properly. The code is very experimental, and will be often updated.
 
