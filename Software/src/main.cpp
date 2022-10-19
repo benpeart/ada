@@ -101,8 +101,8 @@ Depending on which state the robot is in.
 struct {
   float speed = 0;
   float steer = 0;
-  float speedGain = 0.2;
-  float steerGain = 0.3;
+  float speedGain = 0.7;
+  float steerGain = 0.6;
   float speedOffset = 0.0;
   bool selfRight = 0;
   bool disableControl = 0;
@@ -193,6 +193,8 @@ float rxg, ayg, azg;
 // -- Others
 #define PIN_LED 32
 #define PIN_MOTOR_CURRENT 25
+#define PIN_LED_LEFT 33
+#define PIN_LED_RIGHT 26
 
 // ADC definitions (for reading battery voltage)
 #define ADC_CHANNEL_BATTERY_VOLTAGE ADC1_CHANNEL_6 // GPIO number 34
@@ -327,7 +329,11 @@ void setup() {
   setMicroStep(microStep);
 
   pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_LED_LEFT, OUTPUT);
+  pinMode(PIN_LED_RIGHT, OUTPUT);
   digitalWrite(PIN_LED, 0);
+  digitalWrite(PIN_LED_LEFT, 1); // Turn on one LED to indicate we are live
+  digitalWrite(PIN_LED_RIGHT, 0);
 
   motLeft.init();
   motRight.init();
@@ -530,6 +536,8 @@ void setup() {
   adc_set_data_inv(ADC_UNIT_1, true); // For some reason, data is inverted...
 
   Serial.println("Booted, ready for driving!");
+
+  digitalWrite(PIN_LED_RIGHT, 1);
 }
 
 
@@ -691,16 +699,16 @@ void loop() {
       // Detect if robot has fallen. Concept: integrate angle controller error over time. 
       // If absolute integrated error surpasses threshold, disable controller
       angleErrorIntegral += (pidAngle.setpoint - pidAngle.input) * dT;
-      // if (selfRight) {
-      //   if (abs(angleErrorIntegral) > angleErrorIntegralThresholdDuringSelfright) {
-      //     selfRight = 0;
-      //     disableControl = 1;
-      //   }
-      // } else {
-      //   if (abs(angleErrorIntegral) > angleErrorIntegralThreshold) {
-      //     disableControl = 1;
-      //   }
-      // }
+      if (selfRight) {
+        if (abs(angleErrorIntegral) > angleErrorIntegralThresholdDuringSelfright) {
+          selfRight = 0;
+          disableControl = 1;
+        }
+      } else {
+        if (abs(angleErrorIntegral) > angleErrorIntegralThreshold) {
+          disableControl = 1;
+        }
+      }
 
 
       // Switch microstepping
@@ -723,9 +731,12 @@ void loop() {
         motLeft.speed = 0;
         motRight.speed = 0;
         digitalWrite(motEnablePin, 1); // Inverted action on enable pin
+        digitalWrite(PIN_LED_LEFT, 0);
+        digitalWrite(PIN_LED_RIGHT, 0);
       }
       if (abs(filterAngle)<angleEnableThreshold && selfRight) {
         selfRight = 0;
+        angleErrorIntegral = 0; // Reset, otherwise the fall detection will be triggered immediately
       }
     } else { // Control not active
 
@@ -748,6 +759,8 @@ void loop() {
 
       if ((abs(filterAngle)<angleEnableThreshold || selfRight) && !disableControl) { // (re-)enable and reset stuff
         enableControl = 1;
+        digitalWrite(PIN_LED_LEFT, 1);
+        digitalWrite(PIN_LED_RIGHT, 1);
 
         controlMode = 1;
         // avgMotSpeedSum = 0;
@@ -853,7 +866,7 @@ void loop() {
     //   Serial << IBus.readChannel(i) << "\t";
     // }
     // Serial << remoteControl.speed << "\t"  << remoteControl.steer << "\t"  << remoteControl.selfRight << "\t"  << remoteControl.disableControl;
-    // Serial << filterAngle << "\t";
+    Serial << filterAngle << "\t" << angleErrorIntegral << "\t" << enableControl << "\t" << disableControl << "\t" << selfRight << endl;
 
     // Serial << selfRight;
     // Serial << remoteControl.speed << "\t" << remoteControl.steer << endl;
