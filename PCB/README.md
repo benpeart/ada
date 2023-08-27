@@ -68,6 +68,8 @@ Connector J2 has a grid of 12 pins (3x4), with some general pins broken out, tog
 | 11    | AUX5    | D39       |
 | 12    | AUX6    | D36       |
 
+Note: as of PCB version v1.4 AUX2 and AUX4 are connected to the two LEDs that can function as "eyes".
+
 # BOM
 Applicable for v1.3. 
 

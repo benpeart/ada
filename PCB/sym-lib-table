@@ -1,3 +1,5 @@
 (sym_lib_table
-  (lib (name myLib)(type Legacy)(uri C:/Users/klopw/OneDrive/Documenten/KiCad/PendulumRobot/pendulumRobotModule/lib_sch/myLib.lib)(options "")(descr ""))
+  (version 7)
+  (lib (name "myLib")(type "Legacy")(uri "C:/Users/klopw/OneDrive/Documenten/KiCad/PendulumRobot/pendulumRobotModule/lib_sch/myLib.lib")(options "")(descr ""))
+  (lib (name "pendulumRobotModule-rescue")(type "KiCad")(uri "${KIPRJMOD}/pendulumRobotModule-rescue.kicad_sym")(options "")(descr ""))
 )
