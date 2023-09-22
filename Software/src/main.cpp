@@ -56,6 +56,8 @@ float steerFilterConstant = 0.9;  // how fast it reacts to inputs, higher = soft
 
 #define INPUT_PS3 // PS3 controller via bluetooth. Dependencies take up quite some program space!
 
+#define STEPPER_DRIVER_A4988 // Use A4988 stepper driver, which uses different microstepping settings
+
 // ----- Type definitions
 typedef union {
   struct {
@@ -1148,11 +1150,20 @@ void setMicroStep(uint8_t uStep) {
   // uStep table corresponds to 0 1 2 3 4  5  in binary on uStep pins
   // So, we need to take the log2 of input
   uint8_t uStepPow = 0;
-  while (uStep >>= 1) uStepPow++;
+  uint8_t uStepCopy = uStep;
+  while (uStepCopy >>= 1) uStepPow++;
 
   digitalWrite(motUStepPin1, uStepPow&0x01);
   digitalWrite(motUStepPin2, uStepPow&0x02);
   digitalWrite(motUStepPin3, uStepPow&0x04);
+
+#ifdef STEPPER_DRIVER_A4988 // The lookup table for uStepping of the 4988 writes for some reason all three pins high for 1/16th step
+  if (uStep==16) {
+    digitalWrite(motUStepPin1, 1); 
+    digitalWrite(motUStepPin2, 1); 
+    digitalWrite(motUStepPin3, 1); 
+  }  
+#endif
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
