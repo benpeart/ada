@@ -12,6 +12,8 @@ Open src/main.cpp. You should now be able to combile (ctrl+alt+B).
 # Uploading firmware
 For uploading, I strongly prefer OTA, as this works very nice in PlatformIO.  
 
+Beware: when using the A4988 driver, you have to specify a flag. When using any other driver, remove this flag. This is because the A4988 has a different microstepping selection table. 
+
 ## Serial port
 For the first upload, you'll need to upload via USB / the serial port. In platformio.ini, state the COM port under which the ESP32 module is connected (uncomment the line with an IP address / host name), for example 
 upload_port = COM3. 
