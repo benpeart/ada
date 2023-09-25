@@ -53,4 +53,12 @@ For this to work, first load plotTest.htm, then index.htm. This allows to view s
 For a slider based web page to control your robot
 
 hostName.local/control.htm
+or, if you connect to the access point of the robot: 192.168.4.1/control.htm
+
+# Bluetooth control
+The ps3control branch supports a ps3 controller. This is convenient, as the ESP32 has bluetooth, and no additional hardware is required. 
+
+To be documented, soon hopefully. Very short: use sixaxispairtool to assign the correct MAC address to the PS3 controller. 
+
+The ps3control branch doesn't support OTA anymore, as flash space is limited on the ESP32. 
 

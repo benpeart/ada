@@ -23,12 +23,12 @@ This folder contains KiCad (5.0.0) design files for the BalancingRobot PCB.
 Assembly is quite straightforward. For those who like some instructions, here goes. For the ones that don't like to follow instructions: that's ok, but please read the last instruction about adjusting the buck converter voltage.
 
 1. Start with the SMD components on the bottom side. First, pre-tin one pad, then place the SMD component while reheating the first pad. Finally, solder the second pad. C5 is not mounted.
-2. Next, mount the voltage regulator module U3. Use some wires to connect the 4 pads to the PCB.
+2. Next, mount the voltage regulator module U3. The PCB accepts multipe kinds. 
 3. Place the IMU (U2) with the angled male and female headers. Make sure that the IMU is rigidly mounted. If you don't, the IMU might for example vibrate during operation, causing unstable behaviour. See below pictures for clarification.
 4. Add all female headers (J1, J4, J7, and for the stepper driver and ESP32 modules). Optionally, place some headers on J5 and J2 if you like.
 5. Finally, place C2, C4 and F1.
 
-IMPORTANT: adjust the voltage regulator to 5V BEFORE inserting any modules. By default, the voltage regulator is set to a higher voltage, and if you don't adjust it, you'll fry some components. 
+IMPORTANT: when using an adjustable voltage regulator, adjust the voltage regulator to 5V BEFORE inserting any modules. By default, the voltage regulator is set to a higher voltage, and if you don't adjust it, you'll fry some components. 
 
 IMU mounting
 <p float="left">
@@ -38,6 +38,12 @@ IMU mounting
 
 In the end, the PCB should look something like this
 ![Stepper driver improvements](/PCB/pictures/DSCN4937.JPG)
+
+## Version 1.3 onwards
+Some points of attention:
+* The negative lead/cathode/side with flat edge of the LED should go in the *square* hole. The notch on the silkscreen is confusing
+* The buck converter supplied in some kits should be mounted as seen in the picture below
+![Some details](/PCB/pictures/PCBv1p4.jpg)
 
 ## Advanced
 Some optional improvements are listed here, which are not required for basic operation. 
@@ -71,7 +77,7 @@ Connector J2 has a grid of 12 pins (3x4), with some general pins broken out, tog
 Note: as of PCB version v1.4 AUX2 and AUX4 are connected to the two LEDs that can function as "eyes".
 
 # BOM
-Applicable for v1.3. 
+Applicable for v1.3 and onwards. 
 
 | Qty | Reference(s)           | Value                                    |
 |-----|------------------------|------------------------------------------|
@@ -132,5 +138,7 @@ Initial version
 * Changed mounting hole location, such that they are not under the modules
 * Changed SMD resistors from hand soldering to normal (reflow)
 * Added 7805 pin compatible converter and decoupling capacitors
+## v1.4 Aug 2023 
+* Fixed bug with incorrect pinout for the two LEDs
 
 

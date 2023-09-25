@@ -32,7 +32,7 @@ q = [x;phi];
 qd = [xd;phid];
 
 M = diag([m1 m1 m2 m2 0]);
-fi = [fext -m1*g 0 -m2*g 0].'; % External forces
+fi = [0 -m1*g 0 -m2*g fext].'; % External forces
 
 
 Tjl = jacobian(T,q);                
@@ -76,7 +76,7 @@ TSim = 3;
 
 q0 = [0;pi*0.9]; 
 qd0 = [0;0.0];
-parVal = [0.2 9.81 0.04 0.5 0.1 0];
+parVal = [0.2 9.81 0.04 0.1 0.5 0.05];
 
 eom_fun = @(t,s) stated_fun(s.', parVal);
 [t,y] = ode45(eom_fun, [0:dtSim:TSim], [q0;qd0]);
@@ -106,7 +106,7 @@ qddVal = qdd_fun(y, parVal);
 
 % Case 2: robot at fixed position, acceleration profile in rotation
 phiddMax = 120/180*pi;
-phiddT = 0.2;
+phiddT = 0.5;
 
 phidVal = linspace(0,phiddMax, floor(phiddT/dtSim)).';
 phidVal = [phidVal; phidVal(end)*ones(size(phidVal)); flip(phidVal)];
