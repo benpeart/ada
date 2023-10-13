@@ -42,6 +42,7 @@ a "w" for wireless related settings, followed by a "s" for SSID, "k" for key, an
 wsYOURSSIDx\
 wkYOURKEYx\
 wm1x\
+Restart the ESP32, and it should connect to the known WiFi network ("wrx" will reset the ESP32).\
 The serial interface will print information on whether the connection to a known SSID is successful. If the home network cannot be found, the AP will be started.
 
 # Web page editor
