@@ -868,7 +868,7 @@ void loop() {
     //   Serial << IBus.readChannel(i) << "\t";
     // }
     // Serial << remoteControl.speed << "\t"  << remoteControl.steer << "\t"  << remoteControl.selfRight << "\t"  << remoteControl.disableControl;
-    Serial << filterAngle << "\t" << angleErrorIntegral << "\t" << enableControl << "\t" << disableControl << "\t" << selfRight << endl;
+    // Serial << filterAngle << "\t" << angleErrorIntegral << "\t" << enableControl << "\t" << disableControl << "\t" << selfRight << endl;
 
     // Serial << selfRight;
     // Serial << remoteControl.speed << "\t" << remoteControl.steer << endl;
@@ -917,6 +917,8 @@ void parseSerial() {
     if (currentChar == 'x') {
       parseCommand(serialBuf, pos);
       pos = 0;
+      while (Serial.available()) Serial.read();
+      memset(serialBuf, 0, sizeof(serialBuf));
     }
   }
 
@@ -1026,7 +1028,6 @@ void parseCommand(char* data, uint8_t length) {
         char buf[63];
         uint8_t len;
 
-
         switch (cmd2) {
           case 'r':
             Serial.println("Rebooting...");
@@ -1041,16 +1042,18 @@ void parseCommand(char* data, uint8_t length) {
             memcpy(buf, &data[2], len);
             buf[len] = 0;
             preferences.putBytes("wifi_ssid", buf, 63);
+            Serial << "Updated WiFi SSID to: " << buf << endl;
             break;
           case 'k': // Update WiFi key
             len = length-3;
             memcpy(buf, &data[2], len);
             buf[len] = 0;
             preferences.putBytes("wifi_key", buf, 63);
+            Serial << "Updated WiFi key to: " << buf << endl;
             break;
           case 'm': // WiFi mode (0=AP, 1=use SSID)
-            Serial.println(atoi(&data[2]));
             preferences.putUInt("wifi_mode", atoi(&data[2]));
+            Serial << "Updated WiFi mode to (0=access point, 1=connect to SSID): " << atoi(&data[2]) << endl;
             break;
           case 'n': // Robot name
             len = length-3;
@@ -1059,9 +1062,9 @@ void parseCommand(char* data, uint8_t length) {
             if (len>=8) {
               preferences.putBytes("robot_name", buf, 63);
             }
+            Serial << "Updated robot name to: " << buf << endl;
             break;
           }
-          Serial.println(buf);
         break;}
     }
   }

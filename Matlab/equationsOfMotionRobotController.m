@@ -50,17 +50,17 @@ e = phiRef - phi;
 ed = -phid;
 
 Cout = e*Kp + ed*Kd;
-qdd_eqn = simplify(subs(qdd_eqn, fext, Cout));
+% qdd_eqn = simplify(subs(qdd_eqn, fext, Cout));
 
 state = [q; qd];
 stateDerivative = [qd; qdd_eqn];
-parSym = [L g r m1 m2 Kp Kd phiRef];
+parSym = [L g r m1 m2];
 
-stateDerivativeFun = matlabFunction(stateDerivative, 'vars', {state.', parSym, fext});
+stateDerivativeFun = matlabFunction(stateDerivative, 'vars', {state.', parSym, fext}, 'File', 'stateDerivativeFun');
 % Used for animation later on: find local coordinates from state variables
-localCoordinateFun = matlabFunction(T.', 'vars', {state.', parSym});
-qddFun = matlabFunction(qdd_eqn.', 'vars', {state.', parSym});
-controlFun = matlabFunction(Cout, 'vars', {state.', parSym});
+localCoordinateFun = matlabFunction(T.', 'vars', {state.', parSym, fext});
+qddFun = matlabFunction(qdd_eqn.', 'vars', {state.', parSym, fext});
+% controlFun = matlabFunction(Cout, 'vars', {state.', parSym});
 
 %% Double checks
 % What is (rotational) acceleration when upper body is horizontal? 
@@ -114,12 +114,18 @@ q0 = [0;phiStart];
 qd0 = [0;0];
 parVal = [.1 9.81 0.04 .05 0.1 .1 0.005 0.1];
 
-eom_fun = @(t,s) stateDerivativeFun(s.', parVal);
+controlPar.Kp = 0.1;
+controlPar.Kd = 0.005;
+controlPar.phiRef = 0.1;
+controlPar.max = 0.1;
+controlPar.min = -0.1;
+
+eom_fun = @(t,s) odeFun(s.', parVal, controlPar);
 tic
 [t,y] = ode45(eom_fun, [0:dtSim:TSim], [q0;qd0]);
 toc
-CoutSim = controlFun(y, parVal.*ones(length(t),1));
-qddSim = qddFun(y, parVal.*ones(length(t),1));
+CoutSim = controlFun(y, controlPar);
+qddSim = odeFun(y, parVal.*ones(length(t),1), controlPar);
 
 fprintf('Acceleration: %.2f m/s^2\n', qddSim(end,1))
 fprintf('Controller output: %.2f mNm\n', CoutSim(end)*1e3)

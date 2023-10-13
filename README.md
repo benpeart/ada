@@ -20,11 +20,11 @@ I'll try to merge all the branches at some point...
 # General instructions
 
 ## IMU calibration
-Once you have everything up and running, the IMU needs to be calibrated. The web interface has two buttons, one for gyroscope and one for accelerometer calibration. 
+Once you have everything up and running, the IMU needs to be calibrated. This can be done via the web interface, but the easiest option is to use the serial interface. Connect to the COM port (115200 baudrate).
 
-The gyroscope has a (small) offset, which is calibrated away with a constant correction factor (for all three axes). Lay the robot flat on the ground, without any movement. Then, click the gyro calibration button.
+The gyroscope has a (small) offset, which is calibrated away with a constant correction factor (for all three axes). Lay the robot flat on the ground, without any movement. Then, click the gyro calibration button (web interface) or send "k1x" in the serial interface.
 
-The accelerometer is always placed at a (small, or e.g. 90 degree) angle. By clicking on the second button, the current angle of the robot is used as 0. In other words, the robot should be standing still (without any velocity), due to the position controller bringing the robot to an equilibrium. If you can't get the robot to stand stable, for example because the IMU is placed at a 90 degree offset, lift the robot from the ground, hold it vertically, and then click the button. Afterwards, repeat the "normal" calibration procedure (using the position controller).
+The accelerometer is always placed at a (small, or e.g. 90 degree) angle. By clicking on the button (web-interface) or sending "k2x" in the serial interface, the current angle of the robot is used as 0. In other words, the robot should be standing still (without any velocity), due to the position controller bringing the robot to an equilibrium. If you can't get the robot to stand stable, for example because the IMU is placed at a 90 degree offset, lift the robot from the ground, hold it vertically, and then calibrate using button/serial command. Afterwards, repeat the "normal" calibration procedure (using the position controller).
 
 Both calibration results are stored in the EEPROM automatically.
 
