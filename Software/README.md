@@ -23,6 +23,7 @@ Hit the upload button. Currently, the auto reset functionality of the ESP32 modu
 
 ## OTA upload
 When the ESP32 boots, it's IP address is printed. In platformio.ini, fill in this IP address under upload_port. Or, even better, use the hostname balancingRobot.local. This means you don't have to mess around with IP addresses. Make sure to be connected to the same WiFi network as the ESP32, and hit upload.
+
 *Update*: in the ps3control branch, the ESP32 has insufficient flash memory to store the OTA upload. Hence, it is disabled in this branch. 
 
 ## File system
@@ -36,11 +37,11 @@ After flashing, the ESP32 will start an access point (AP), named balancingRobot.
 
 *Update:* I noticed that in the latest version, the web pages are not correctly loaded, when the ESP32 is running in access point mode. When connected to a known SSID, everything works as it should.
 To configure the WiFi settings without a web page, we use the serial interface (115200 baud). 
-The command structure is: 
-a "w" for wireless related settings, followed by a "s" for SSID, "k" for key, and "m" for WiFi mode (0 = access point, 1 = connect to SSID), followed by the content, followed by a terminating "x". The recipe for connecting to a known SSID is thus:
-wsYOURSSIDx
-wkYOURKEYx
-wm1x
+The command structure is: \
+a "w" for wireless related settings, followed by a "s" for SSID, "k" for key, and "m" for WiFi mode (0 = access point, 1 = connect to SSID), followed by the content, followed by a terminating "x". The recipe for connecting to a known SSID is thus:\
+wsYOURSSIDx\
+wkYOURKEYx\
+wm1x\
 The serial interface will print information on whether the connection to a known SSID is successful. If the home network cannot be found, the AP will be started.
 
 # Web page editor
