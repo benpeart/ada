@@ -41,8 +41,6 @@ private:
   uint8_t _timerNo;
   float lastSpeed = 0.0;
   boolean timerEnable = 0;
-  // static void (*timerFunction)();
-  // static const portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 };
 
 
