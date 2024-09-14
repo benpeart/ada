@@ -16,7 +16,6 @@ Also, you have to publish all modifications.
 
 #define WEBUI // WiFi and Web UI
 // #define SPIFFSEDITOR // include the SPPIFFS editor
-// #define INPUT_IBUS // FlySkyIBus signal containing 8 RC-Channels in 1 PIN ("RX" on board)
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
 #define INPUT_XBOX // Xbox controller via bluetooth. Dependencies take up quite some program space!
 // #define LED_PINS
@@ -37,15 +36,10 @@ Also, you have to publish all modifications.
 #include <SPIFFSEditor.h>
 #endif // SPIFFSEDITOR
 #endif // WEBUI
-#include <Streaming.h>
 #include <MPU6050.h>
 #include <PID.h>
 #include <fastStepper.h>
-// #include <par.h>
 #include <Preferences.h> // for storing settings
-#ifdef INPUT_IBUS
-#include <FlySkyIBus.h>
-#endif // INPUT_IBUS
 #ifdef INPUT_PS3
 #include <Ps3Controller.h>
 #endif // INPUT_PS3
@@ -56,6 +50,7 @@ Also, you have to publish all modifications.
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 #endif // BATTERY_VOLTAGE
+#include "debug.h"
 
 // ----- Input method
 
@@ -82,17 +77,6 @@ float steerFilterConstant = 0.9; // how fast it reacts to inputs, higher = softe
 
 #ifdef WEBUI
 // ----- Type definitions
-typedef union
-{
-  struct
-  {
-    float val; // Float (4 bytes) comes first, as otherwise padding will be applied
-    uint8_t cmd;
-    uint8_t checksum;
-  };
-  uint8_t array[6];
-} command;
-
 typedef union
 {
   uint8_t arr[6];
@@ -244,9 +228,6 @@ float gyroGain = 1.0;
 float rxg, ayg, azg;
 
 // -- Others
-#ifdef MOTOR_CURRENT
-#define PIN_MOTOR_CURRENT 25
-#endif // MOTOR_CURRENT
 #ifdef LED_PINS
 #define PIN_LED 32
 #define PIN_LED_LEFT 33
@@ -267,35 +248,6 @@ char robotName[32] = "ada";
 
 // BT MAC
 char BTaddress[20] = "00:00:00:00:00:00";
-
-// Noise source (for system identification)
-boolean noiseSourceEnable = 0;
-float noiseSourceAmplitude = 1;
-
-// ----- Parameter definitions -----
-// void updatePIDParameters() {
-//   pidAngle.updateParameters();
-//   pidSpeed.updateParameters();
-//   pidPos.updateParameters();
-// }
-// par pidPar[] = {&pidAngle.K, &pidAngle.Ti, &pidAngle.Td, &pidAngle.N, &pidAngle.R, &pidAngle.minOutput, &pidAngle.maxOutput, &pidAngle.controllerType,
-//   &pidPos.K, &pidPos.Ti, &pidPos.Td, &pidPos.N, &pidPos.R, &pidPos.minOutput, &pidPos.maxOutput, &pidPos.controllerType,
-//   &pidSpeed.K, &pidSpeed.Ti, &pidSpeed.Td, &pidSpeed.N, &pidSpeed.R, &pidSpeed.minOutput, &pidSpeed.maxOutput, &pidSpeed.controllerType, &updatePIDParameters};
-//
-// parList pidParList(pidPar);
-
-// par motorPar[] = {&motorCurrent, &maxStepSpeed};
-// par wifiPar[] = {&wifiMode, &wifiSSID, &wifiKey};
-// par sensorPar[] = {&gyroOffset, &gyroGain, &angleOffset, &updateGyroOffset, &updateAngleOffset};
-// par controlPar[] = {&remoteType, &controlMode};
-
-// struct {
-//   struct {
-//     uint8_t mode;
-//     char ssid[30];
-//     char key[30];
-//   } wifi;
-// } settings;
 
 // ----- Interrupt functions -----
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -324,22 +276,6 @@ void motEnable(boolean enable)
     enabled = enable;
   }
 }
-
-#if NEVER
-void wirelessTask(void *parameters)
-{
-  while (1)
-  {
-#ifdef INPUT_IBUS
-    IBus.loop();
-#endif
-#ifdef WEBUI
-    wsServer.loop();
-    delay(2); // !!! FIX THIS !!! why a delay?
-#endif        // WEBUI
-  }
-}
-#endif // NEVER
 
 // -- PPM Input
 #ifdef INPUT_PPM
@@ -390,9 +326,6 @@ void setup()
 {
 
   Serial.begin(115200);
-#ifdef INPUT_IBUS
-  IBus.begin(Serial2);
-#endif
   preferences.begin("settings", false); // false = RW-mode
   // preferences.clear();  // Remove all preferences under the opened namespace
 
@@ -421,7 +354,7 @@ void setup()
   delay(200);
   Wire.begin(21, 22, 400000UL);
   delay(100);
-  Serial.println(imu.testConnection());
+  DB_PRINTLN(imu.testConnection());
   imu.initialize();
   imu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
   // Calculate and store gyro offsets
@@ -433,19 +366,19 @@ void setup()
   {
     preferences.clear(); // Remove all preferences under the opened namespace
     preferences.putUInt("pref_version", PREF_VERSION);
-    Serial << "EEPROM init complete, all preferences deleted, new pref_version: " << PREF_VERSION << "\n";
+    DB_PRINTF("EEPROM init complete, all preferences deleted, new pref_version: %d\n", PREF_VERSION);
   }
 
   // Read gyro offsets
-  Serial << "Gyro calibration values: ";
+  DB_PRINT("Gyro calibration values: ");
   for (uint8_t i = 0; i < 3; i++)
   {
     char buf[16];
     sprintf(buf, "gyro_offset_%u", i);
     gyroOffset[i] = preferences.getShort(buf, 0);
-    Serial << gyroOffset[i] << "\t";
+    DB_PRINTF("%u\t", gyroOffset[i]);
   }
-  Serial << endl;
+  DB_PRINTLN();
 
   // Read angle offset
   angleOffset = preferences.getFloat("angle_offset", 0.0);
@@ -455,7 +388,7 @@ void setup()
 
   // Read robot name
   uint32_t len = preferences.getBytes("robot_name", robotName, sizeof(robotName));
-  Serial.println(robotName);
+  DB_PRINTLN(robotName);
 
 #ifdef WEBUI
   // Connect to Wifi and setup OTA if known Wifi network cannot be found
@@ -467,27 +400,27 @@ void setup()
     char key[63] = "";
     preferences.getBytes("wifi_ssid", ssid, sizeof(ssid));
     preferences.getBytes("wifi_key", key, sizeof(key));
-    Serial << "Connecting to '" << ssid << "'" << endl;
+    DB_PRINTF("Connecting to '%s'\n", ssid);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, key);
     if (!(WiFi.waitForConnectResult() != WL_CONNECTED))
     {
-      Serial.print("Connected to WiFi with IP address: ");
-      Serial.println(WiFi.localIP());
+      DB_PRINT("Connected to WiFi with IP address: ");
+      DB_PRINTLN(WiFi.localIP());
       wifiConnected = 1;
     }
     else
     {
-      Serial.println("Could not connect to known WiFi network");
+      DB_PRINTLN("Could not connect to known WiFi network");
     }
   }
   if (!wifiConnected)
   {
-    Serial.println("Starting AP...");
+    DB_PRINTLN("Starting AP...");
     WiFi.mode(WIFI_AP_STA);
     // WiFi.softAPConfig(apIP, apIP, IPAddress(192,168,178,24));
-    WiFi.softAP(robotName, "turboturbo");
-    Serial << "AP named '" << WiFi.softAPSSID() << "' started, IP address: " << WiFi.softAPIP() << endl;
+    WiFi.softAP(robotName);
+    DB_PRINTF("AP named '%s' started, IP address: %s\n", WiFi.softAPSSID(), WiFi.softAPIP().toString());
   }
 
   ArduinoOTA
@@ -498,42 +431,42 @@ void setup()
       type = "sketch";
     else // U_SPIFFS
       type = "filesystem";
-    Serial.println("Start updating " + type); })
+    DB_PRINTLN("Start updating " + type); })
       .onEnd([]()
-             { Serial.println("\nEnd"); })
+             { DB_PRINTLN("\nEnd"); })
       .onProgress([](unsigned int progress, unsigned int total)
-                  { Serial.printf("Progress: %u%%\r\n", (progress / (total / 100))); })
+                  { DB_PRINTF("Progress: %u%%\r\n", (progress / (total / 100))); })
       .onError([](ota_error_t error)
                {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR) Serial.println("End Failed"); });
+    DB_PRINTF("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) DB_PRINTLN("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) DB_PRINTLN("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) DB_PRINTLN("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) DB_PRINTLN("Receive Failed");
+    else if (error == OTA_END_ERROR) DB_PRINTLN("End Failed"); });
 
   ArduinoOTA.begin();
 
   // Start DNS server
   if (MDNS.begin(robotName))
   {
-    Serial.print("MDNS responder started, name: ");
-    Serial.println(robotName);
+    DB_PRINT("MDNS responder started, name: ");
+    DB_PRINTLN(robotName);
   }
   else
   {
-    Serial.println("Could not start MDNS responder");
+    DB_PRINTLN("Could not start MDNS responder");
   }
 
   // SPIFFS setup
   if (!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED))
   {
-    Serial.println("SPIFFS mount failed");
+    DB_PRINTLN("SPIFFS mount failed");
     return;
   }
   else
   {
-    Serial.println("SPIFFS mount success");
+    DB_PRINTLN("SPIFFS mount success");
   }
 
   // setup the Async Web Server
@@ -552,26 +485,6 @@ void setup()
   MDNS.addService("ws", "tcp", 81);
 #endif // WEBUI
 
-#if 0
-  // Make some funny sounds
-  Serial.println("spinning the wheels forward...");
-  motEnable(true); // Enable motors
-  for (uint8_t i = 0; i < 150; i++)
-  {
-    Serial.print(".");
-    motRight.speed = 500 + i * 10;
-    motRight.update();
-    motLeft.speed = 500 + i * 10;
-    motLeft.update();
-    delay(5);
-  }
-  motEnable(false); // Disable steppers during startup
-  Serial.println("done spinning the wheels forward");
-#endif
-
-#ifdef MOTOR_CURRENT
-  dacWrite(PIN_MOTOR_CURRENT, motorCurrent);
-#endif // MOTOR_CURRENT
   pidAngle.setParameters(0.65, 1.0, 0.075, 15);
   pidPos.setParameters(1, 0, 1.2, 50);
   pidSpeed.setParameters(6, 5, 0, 20);
@@ -604,8 +517,8 @@ void setup()
   String address = Ps3.getAddress();
   int bt_len = address.length() + 1;
   address.toCharArray(BTaddress, bt_len);
-  Serial.print("Bluetooth MAC address: ");
-  Serial.println(address);
+  DB_PRINT("Bluetooth MAC address: ");
+  DB_PRINTLN(address);
 #endif
 
 // Setup Xbox controller
@@ -613,22 +526,22 @@ void setup()
   xboxController.begin();
 #endif
 
-  Serial.println("Ready");
+  DB_PRINTLN("Ready");
 
   // Characterize ADC at particular atten
 #ifdef BATTERY_VOLTAGE
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_0db, ADC_WIDTH_BIT_12, 1100, &adc_chars);
   if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF)
   {
-    Serial.println("eFuse Vref");
+    DB_PRINTLN("eFuse Vref");
   }
   else if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP)
   {
-    Serial.println("Two Point");
+    DB_PRINTLN("Two Point");
   }
   else
   {
-    Serial.println("Default");
+    DB_PRINTLN("Default");
   }
   Serial << "ADC calibration values (attenuation, vref, coeff a, coeff b):" << adc_chars.atten << "\t" << adc_chars.vref << "\t" << adc_chars.coeff_a << "\t" << adc_chars.coeff_b << endl;
 
@@ -636,7 +549,7 @@ void setup()
   adc1_config_channel_atten(ADC_CHANNEL_BATTERY_VOLTAGE, ADC_ATTEN_0db);
   adc_set_data_inv(ADC_UNIT_1, true); // For some reason, data is inverted...
 #endif                                // BATTERY_VOLTAGE
-  Serial.println("Booted, ready for driving!");
+  DB_PRINTLN("Booted, ready for driving!");
 #ifdef LED_PINS
   digitalWrite(PIN_LED_RIGHT, 1);
 #endif // LED_PINS
@@ -676,34 +589,6 @@ void loop()
   if (tNow - tLast > dT_MICROSECONDS)
   {
     readSensor();
-// Read receiver inputs
-#ifdef INPUT_IBUS
-    if (IBus.isActive())
-    {                                                                                            // Check if receiver is active
-      remoteControl.speed = ((float)IBus.readChannel(1) - 1500) / 5.0 * remoteControl.speedGain; // Normalise between -100 and 100
-      remoteControl.steer = ((float)IBus.readChannel(0) - 1500) / 5.0 * remoteControl.steerGain;
-
-      // Edge detection
-      bool selfRightInput = IBus.readChannel(3) > 1600 && IBus.readChannel(3) < 2100;
-      bool disableControlInput = IBus.readChannel(3) < 1400 && IBus.readChannel(3) > 900;
-      static bool lastSelfRightInput = 0, lastDisableControlInput = 0;
-
-      remoteControl.selfRight = selfRightInput && !lastSelfRightInput;
-      remoteControl.disableControl = disableControlInput && !lastDisableControlInput;
-
-      lastSelfRightInput = selfRightInput;
-      lastDisableControlInput = disableControlInput;
-
-      if (IBus.readChannel(4) > 1600)
-      {
-        overrideMode = 1;
-      }
-      else if (IBus.readChannel(4) < 1400 && IBus.readChannel(4) > 900)
-      {
-        overrideMode = 0;
-      }
-    }
-#endif
 
 #ifdef INPUT_PPM
     if (rxData[1] == 0 || rxData[0] == 0)
@@ -737,11 +622,6 @@ void loop()
 
     if (enableControl)
     {
-      // Read receiver inputs
-
-      // uint8_t lastControlMode = controlMode;
-      // controlMode = (2000-IBus.readChannel(5))/450;
-
       if (abs(avgSpeed) < 0.2)
       {
         // remoteControl.speed = 0;
@@ -801,13 +681,6 @@ void loop()
 
       pidAngleOutput = pidAngle.calculate();
 
-      // Optionally, add some noise to angle for system identification purposes
-      if (noiseSourceEnable)
-      {
-        noiseValue = noiseSourceAmplitude * ((random(1000) / 1000.0) - 0.5);
-        pidAngleOutput += noiseValue;
-      }
-
       avgMotSpeedSum += pidAngleOutput / 2;
       if (avgMotSpeedSum > maxStepSpeed)
       {
@@ -855,12 +728,10 @@ void loop()
         //   setMicroStep(microStep);
         // }
 
-#ifdef DEBUG
-      Serial.printf(">motLeft.speed:%d\n", (int)motLeft.speed);
-      Serial.printf(">motRight.speed:%d\n", (int)motRight.speed);
-      Serial.printf(">microStep:%d\n", microStep);
-      Serial.printf(">filterAngle:%d\n", (int)filterAngle);
-#endif
+      DB_PRINTF(">motLeft.speed:%d\n", (int)motLeft.speed);
+      DB_PRINTF(">motRight.speed:%d\n", (int)motRight.speed);
+      DB_PRINTF(">microStep:%d\n", microStep);
+      DB_PRINTF(">filterAngle:%d\n", (int)filterAngle);
 
       // Disable control if robot is almost horizontal. Re-enable if upright.
       if ((abs(filterAngle) > angleDisableThreshold && !selfRight) || disableControl)
@@ -883,7 +754,7 @@ void loop()
     }
     else
     { // Control not active
-      Serial.println("control not active");
+      DB_PRINTLN("control not active");
 
       // Override control
       if (overrideMode && !lastOverrideMode)
@@ -1031,29 +902,11 @@ void loop()
     wsServer.loop();
 #endif // WEBUI
 
-    // Serial << IBus.isActive() << "\t";
-    // for (uint8_t i=0; i<6; i++) {
-    //   Serial << IBus.readChannel(i) << "\t";
-    // }
-    // Serial << remoteControl.speed << "\t"  << remoteControl.steer << "\t"  << remoteControl.selfRight << "\t"  << remoteControl.disableControl;
-    // Serial << filterAngle << "\t" << angleErrorIntegral << "\t" << enableControl << "\t" << disableControl << "\t" << selfRight << endl;
-
-    // Serial << selfRight;
-    // Serial << remoteControl.speed << "\t" << remoteControl.steer << endl;
-
-    // Serial << microStep << "\t" << absSpeed << "\t" << endl;
-
-    // Serial << endl;
-
     parseSerial();
 
     // Serial << micros()-tNow << "\t";
 
     tLast = tNow;
-
-#ifdef INPUT_IBUS
-    IBus.loop();
-#endif
 
 // Handle PS3 controller
 #ifdef INPUT_PS3
@@ -1074,7 +927,7 @@ void loop()
     {
       if (xboxController.isWaitingForFirstNotification())
       {
-        //        Serial.println("waiting for first notification");
+        //        DB_PRINTLN("waiting for first notification");
       }
       else
       {
@@ -1191,27 +1044,20 @@ void parseCommand(char *data, uint8_t length)
       }
       pidTemp->updateParameters();
 
-      Serial << controllerNumber << "\t" << pidTemp->K << "\t" << pidTemp->Ti << "\t" << pidTemp->Td << "\t" << pidTemp->N << "\t" << pidTemp->controllerType << endl;
+      // Serial << controllerNumber << "\t" << pidTemp->K << "\t" << pidTemp->Ti << "\t" << pidTemp->Td << "\t" << pidTemp->N << "\t" << pidTemp->controllerType << endl;
       break;
     }
     case 'a': // Change angle offset
       angleOffset = atof(data + 1);
-      Serial << angleOffset << endl;
+      DB_PRINTLN(angleOffset);
       break;
     case 'f':
       gyroFilterConstant = atof(data + 1);
-      Serial << gyroFilterConstant << endl;
-      break;
-    case 'v':
-      motorCurrent = atof(data + 1);
-      Serial << motorCurrent << endl;
-#ifdef MOTOR_CURRENT
-      dacWrite(PIN_MOTOR_CURRENT, motorCurrent);
-#endif // MOTOR_CURRENT
+      DB_PRINTLN(gyroFilterConstant);
       break;
     case 'm':
       val2 = atof(data + 1);
-      Serial << val2 << endl;
+      DB_PRINTLN(val2);
       controlMode = (controlType)val2;
       break;
     case 'u':
@@ -1233,12 +1079,6 @@ void parseCommand(char *data, uint8_t length)
         plot.prescaler = atoi(data + 2);
         break;
 #endif          // WEBUI
-      case 'n': // Noise source enable
-        noiseSourceEnable = atoi(data + 2);
-        break;
-      case 'a': // Noise source amplitude
-        noiseSourceAmplitude = atof(data + 2);
-        break;
       }
       break;
     }
@@ -1260,9 +1100,8 @@ void parseCommand(char *data, uint8_t length)
       }
       else if (cmd2 == 2)
       { // calibrate acc
-        Serial << "Updating angle offset from " << angleOffset;
+        DB_PRINTF("Updating angle offset from %.2f to %.2f", angleOffset, filterAngle);
         angleOffset = filterAngle;
-        Serial << " to " << angleOffset << endl;
         preferences.putFloat("angle_offset", angleOffset);
       }
       break;
@@ -1282,7 +1121,7 @@ void parseCommand(char *data, uint8_t length)
       switch (cmd2)
       {
       case 'r':
-        Serial.println("Rebooting...");
+        DB_PRINTLN("Rebooting...");
         ESP.restart();
         // pidParList.sendList(&wsServer);
         break;
@@ -1295,18 +1134,18 @@ void parseCommand(char *data, uint8_t length)
         memcpy(buf, &data[2], len);
         buf[len] = 0;
         preferences.putBytes("wifi_ssid", buf, 63);
-        Serial << "Updated WiFi SSID to: " << buf << endl;
+        DB_PRINTF("Updated WiFi SSID to: %s\n", buf);
         break;
       case 'k': // Update WiFi key
         len = length - 3;
         memcpy(buf, &data[2], len);
         buf[len] = 0;
         preferences.putBytes("wifi_key", buf, 63);
-        Serial << "Updated WiFi key to: " << buf << endl;
+        DB_PRINTF("Updated WiFi key to: %s\n", buf);
         break;
       case 'm': // WiFi mode (0=AP, 1=use SSID)
         preferences.putUInt("wifi_mode", atoi(&data[2]));
-        Serial << "Updated WiFi mode to (0=access point, 1=connect to SSID): " << atoi(&data[2]) << endl;
+        DB_PRINTF("Updated WiFi mode to (0=access point, 1=connect to SSID): %d\n", atoi(&data[2]));
         break;
 #endif          // WEBUI
       case 'n': // Robot name
@@ -1317,7 +1156,7 @@ void parseCommand(char *data, uint8_t length)
         {
           preferences.putBytes("robot_name", buf, 63);
         }
-        Serial << "Updated robot name to: " << buf << endl;
+        DB_PRINTF("Updated robot name to: %s\n", buf);
         break;
       }
       break;
@@ -1336,7 +1175,7 @@ void sendWifiList(void)
   wBuf[0] = 'w';
   wBuf[1] = 'l';
 
-  Serial.println("Scan started");
+  DB_PRINTLN("Scan started");
   n = WiFi.scanNetworks();
 
   if (n > 5)
@@ -1349,7 +1188,7 @@ void sendWifiList(void)
   }
   wBuf[pos - 1] = 0;
 
-  Serial.println(wBuf);
+  DB_PRINTLN(wBuf);
   wsServer.sendTXT(0, wBuf);
 }
 #endif // WEBUI
@@ -1379,7 +1218,7 @@ void calculateGyroOffset(uint8_t nSample)
     preferences.putShort(buf, gyroOffset[i]);
   }
 
-  Serial << "New gyro calibration values: " << gyroOffset[0] << "\t" << gyroOffset[1] << "\t" << gyroOffset[2] << endl;
+  DB_PRINTF("New gyro calibration values: %d\t%d\t%d\n", gyroOffset[0], gyroOffset[1], gyroOffset[2]);
 }
 
 void readSensor()
@@ -1478,45 +1317,28 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   switch (type)
   {
   case WStype_DISCONNECTED:
-    Serial.printf("[%u] Disconnected!\n", num);
+    DB_PRINTF("\[%u\] Disconnected!\n", num);
     break;
   case WStype_CONNECTED:
   {
     IPAddress ip = wsServer.remoteIP(num);
-    Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+    DB_PRINTF("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
     sendConfigurationData(num);
   }
   break;
   case WStype_TEXT:
-    Serial.printf("[%u] get Text: %s\n", num, payload);
+    DB_PRINTF("[%u] get Text: %s\n", num, payload);
     parseCommand((char *)payload, length);
     break;
   case WStype_BIN:
   {
-    // Serial.printf("[%u] get binary length: %u\n", num, length);
+    // DB_PRINTF("[%u] get binary length: %u\n", num, length);
 
     if (length == 6)
     {
       cmd c;
       memcpy(c.arr, payload, 6);
-      Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
-      //
-      //   if (c.grp<parList::groupCounter) {
-      //     if (c.grp==0 && c.cmd<100) {
-      //       pidParList.set(c.cmd,c.val);
-      //
-      //       // pidPar[c.cmd].setFloat(c.val);
-      //     }
-      //     if (c.cmd==253) {
-      //       pidParList.sendList(&wsServer);
-      //     }
-      //     if (c.cmd==254) {
-      //       pidParList.read();
-      //     }
-      //     if (c.cmd==255) {
-      //       pidParList.write();
-      //     }
-      //   } else if (c.grp==100) {
+      // Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
       if (c.grp == 100)
       {
         switch (c.cmd)
@@ -1672,13 +1494,13 @@ void onPs3Notify()
 void onPs3Connect()
 {
   digitalWrite(PIN_LED, 1);
-  Serial.println("Bluetooth controller connected");
+  DB_PRINTLN("Bluetooth controller connected");
 }
 
 void onPs3Disconnect()
 {
   digitalWrite(PIN_LED, 0);
-  Serial.println("Bluetooth controller disconnected");
+  DB_PRINTLN("Bluetooth controller disconnected");
   remoteControl.speed = 0;
   remoteControl.steer = 0;
   remoteControl.speedGain = 1;
@@ -1738,9 +1560,9 @@ void onXboxConnect()
 #ifdef LED_PINS
   digitalWrite(PIN_LED, 1);
 #endif // LED_PINS
-  Serial.println("Bluetooth MAC address: " + xboxController.buildDeviceAddressStr());
-  Serial.print(xboxController.xboxNotif.toString());
-  Serial.println("Xbox controller connected");
+  DB_PRINTLN("Bluetooth MAC address: " + xboxController.buildDeviceAddressStr());
+  DB_PRINT(xboxController.xboxNotif.toString());
+  DB_PRINTLN("Xbox controller connected");
 }
 
 void onXboxDisconnect()
@@ -1748,10 +1570,10 @@ void onXboxDisconnect()
 #ifdef LED_PINS
   digitalWrite(PIN_LED, 0);
 #endif // LED_PINS
-  Serial.println("Xbox controller disconnected");
+  DB_PRINTLN("Xbox controller disconnected");
   remoteControl.speed = 0;
   remoteControl.steer = 0;
   remoteControl.speedGain = 1;
   remoteControl.steerGain = 1;
 }
-#endif
+#endif // XBOX
