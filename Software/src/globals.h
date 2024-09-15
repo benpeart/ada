@@ -1,14 +1,21 @@
-#include <Arduino.h>
-#include <Preferences.h> // for storing settings
-#include <fastStepper.h>
-#include "PID.h"
-
 #define WEBUI // WiFi and Web UI
 // #define SPIFFSEDITOR // include the SPPIFFS editor
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
 #define INPUT_XBOX // Xbox controller via bluetooth. Dependencies take up quite some program space!
 // #define LED_PINS
 // #define BATTERY_VOLTAGE
+
+#include <Arduino.h>
+#include <Preferences.h> // for storing settings
+#include <fastStepper.h>
+#include "PID.h"
+#ifdef WEBUI
+#include "webui.h"
+
+extern plotType plot;
+#endif // WEBUI
+
+void parseCommand(char *data, uint8_t length);
 
 extern Preferences preferences;
 
@@ -31,8 +38,6 @@ extern float pidSpeedOutput;
 extern float speedFilterConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 extern float steerFilterConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 extern char BTaddress[];
-
-void parseCommand(char *data, uint8_t length);
 
 /*  Remote control structure
     Every remote should give a speed and steer command from -100 ... 100

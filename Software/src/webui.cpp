@@ -19,23 +19,25 @@ char robotName[32] = "ada"; // -- Used as WiFi network name
 AsyncWebServer httpServer(80);
 WebSocketsServer wsServer = WebSocketsServer(81);
 
+plotType plot;
+
 void sendConfigurationData(uint8_t num);
 
 bool WebUI_setup()
 {
     // Read robot name
-    uint32_t len = preferences.getBytes("robot_name", robotName, sizeof(robotName));
+    uint32_t len = preferences.getString("robot_name", robotName, sizeof(robotName));
     DB_PRINTLN(robotName);
 
     // Connect to Wifi and setup OTA if known Wifi network cannot be found
     WiFi.setHostname(robotName);
     boolean wifiConnected = 0;
-    //  if (preferences.getUInt("wifi_mode", 0) == 1)
+    if (preferences.getUInt("wifi_mode", 1) == 1)
     {
         char ssid[32] = "IOT";
         char key[63] = "";
-        preferences.getBytes("wifi_ssid", ssid, sizeof(ssid));
-        preferences.getBytes("wifi_key", key, sizeof(key));
+        preferences.getString("wifi_ssid", ssid, sizeof(ssid));
+        preferences.getString("wifi_key", key, sizeof(key));
         DB_PRINTF("Connecting to '%s'\n", ssid);
         WiFi.mode(WIFI_STA);
         WiFi.begin(ssid, key);
@@ -59,14 +61,18 @@ bool WebUI_setup()
         DB_PRINTF("AP named '%s' started, IP address: %s\n", WiFi.softAPSSID(), WiFi.softAPIP().toString());
     }
 
+    ArduinoOTA.setHostname(robotName);
     ArduinoOTA
         .onStart([]()
                  {
     String type;
     if (ArduinoOTA.getCommand() == U_FLASH)
-      type = "sketch";
-    else // U_SPIFFS
-      type = "filesystem";
+    {
+        type = "sketch";
+    } else { // U_SPIFFS
+        type = "filesystem";
+        SPIFFS.end();
+    }
     DB_PRINTLN("Start updating " + type); })
         .onEnd([]()
                { DB_PRINTLN("\nEnd"); })
@@ -74,14 +80,15 @@ bool WebUI_setup()
                     { DB_PRINTF("Progress: %u%%\r\n", (progress / (total / 100))); })
         .onError([](ota_error_t error)
                  {
-    DB_PRINTF("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) DB_PRINTLN("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) DB_PRINTLN("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) DB_PRINTLN("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) DB_PRINTLN("Receive Failed");
-    else if (error == OTA_END_ERROR) DB_PRINTLN("End Failed"); });
+                    DB_PRINTF("Error[%u]: ", error);
+                    if (error == OTA_AUTH_ERROR) DB_PRINTLN("Auth Failed");
+                    else if (error == OTA_BEGIN_ERROR) DB_PRINTLN("Begin Failed");
+                    else if (error == OTA_CONNECT_ERROR) DB_PRINTLN("Connect Failed");
+                    else if (error == OTA_RECEIVE_ERROR) DB_PRINTLN("Receive Failed");
+                    else if (error == OTA_END_ERROR) DB_PRINTLN("End Failed"); });
 
     ArduinoOTA.begin();
+    DB_PRINTLN("Ready for OTA updates");
 
     // Start DNS server
     if (MDNS.begin(robotName))
@@ -114,8 +121,8 @@ bool WebUI_setup()
 #endif // SPIFFSEDITOR
     httpServer.begin();
 
-    wsServer.begin();
     wsServer.onEvent(webSocketEvent);
+    wsServer.begin();
 
     MDNS.addService("http", "tcp", 80);
     MDNS.addService("ws", "tcp", 81);
@@ -152,7 +159,8 @@ void WebUI_loop()
     {
         k = 0;
 
-        if (wsServer.connectedClients(0) > 0 && plot.enable)
+//        DB_PRINTF("WebUI_Loop plot.enable = %d, wsServer.connectedClients =  %d\n", plot.enable, wsServer.connectedClients());
+        if (plot.enable && wsServer.connectedClients() > 0)
         {
             union
             {
@@ -180,11 +188,7 @@ void WebUI_loop()
             plotData.f[10] = pidSpeed.input;
             plotData.f[11] = pidSpeedOutput;
             plotData.f[12] = motLeft.speed;
-            plotData.f[13] = motLeft.speed;
-            // plotData.f[12] = noiseValue;?
-            // plotData.f[9] = ayg;
-            // plotData.f[10] = azg;
-            // plotData.f[11] = rxg;
+            plotData.f[13] = motRight.speed;
             // plotData.f[11] = microStep;
             wsServer.sendBIN(0, plotData.b, sizeof(plotData.b));
         }

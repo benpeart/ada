@@ -21,11 +21,11 @@ typedef union
 } cmd;
 
 // Plot settings
-struct
+typedef struct
 {
   boolean enable = 0; // Enable sending data
   uint8_t prescaler = 4;
-} plot;
+} plotType;
 
 void sendWifiList(void);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
