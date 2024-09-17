@@ -28,7 +28,7 @@ void sendConfigurationData(uint8_t num);
 bool WebUI_setup()
 {
     // Read robot name
-    uint32_t len = preferences.getString("robot_name", robotName, sizeof(robotName));
+    preferences.getString("robot_name", robotName, sizeof(robotName));
     DB_PRINTLN(robotName);
 
     // Connect to Wifi and setup OTA if known Wifi network cannot be found
@@ -297,7 +297,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 void sendConfigurationData(uint8_t num)
 {
     // send message to client
-    char wBuf[63];
+    char wBuf[65];
     char buf[63];
     sprintf(wBuf, "c%dp%.4f", 1, pidAngle.K);
     wsServer.sendTXT(num, wBuf);
@@ -353,11 +353,12 @@ void sendConfigurationData(uint8_t num)
     wsServer.sendTXT(num, wBuf);
     sprintf(wBuf, "wm%d", preferences.getUInt("wifi_mode", 0)); // 0=AP, 1=Client
     wsServer.sendTXT(num, wBuf);
-    preferences.getBytes("wifi_ssid", buf, 63);
+    preferences.getString("wifi_ssid", buf, sizeof(buf));
     sprintf(wBuf, "ws%s", buf);
     wsServer.sendTXT(num, wBuf);
-    sprintf(wBuf, "wn%s", robotName);
+    preferences.getString("wifi_key", buf, sizeof(buf));
+    sprintf(wBuf, "wk%s", buf);
     wsServer.sendTXT(num, wBuf);
-    sprintf(wBuf, "wb%s", BTaddress);
+    sprintf(wBuf, "wn%s", robotName);
     wsServer.sendTXT(num, wBuf);
 }

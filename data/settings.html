@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Ada tuning interface</title>
+	<style>
+		body {
+			background-color: white;
+			color: black;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			body {
+				background-color: black;
+				color: white;
+			}
+		}
+
+		ul {
+			list-style-type: none;
+			margin: 0;
+			padding: 0;
+			overflow: hidden;
+			background-color: #333;
+		}
+
+		li {
+			float: left;
+		}
+
+		li a {
+			display: block;
+			color: white;
+			text-align: center;
+			padding: 14px 16px;
+			text-decoration: none;
+		}
+
+		li a:hover {
+			background-color: #111;
+		}
+
+		/*
+		.myDiv {
+			background-color: lightgrey;
+			width: 900px;
+			border: 10px solid green;
+			padding: 25px;
+			margin: 25px;
+		}*/
+	</style>
+</head>
+
+<body>
+	<div class="myDiv">
+		<form>
+			<fieldset>
+				<legend>Wifi configuration</legend>
+				<input id="wm" type="radio" name="wm" value="0" onchange=sendData(this);>AP
+				<input id="wm" type="radio" name="wm" value="1" onchange=sendData(this);>SSID<br />
+				Robot name<br /><input type="text" id="wn" value="" style="width:400px" maxlength="32"><br />
+				<button type="button" onclick="sendCommand('wn', document.getElementById('wn').value) ">Save name to
+					EEPROM (Active after Reboot)</button>
+				<button type="button" onclick="sendCommand('wr',1)">Reboot</button><br /><br />
+				Network name<br /><input type="text" id="WifiSSID" value="" style="width:400px" maxlength="32"><br />
+				<select id="SSIDlist" onchange="selectWifiFromList(this.value)" style="width:400px"></select>
+				<button type="button" onclick="sendCommand('wl',1)">Scan</button><br />
+				Security Key<br /><input type="password" id="WifiKey" style="width:400px" maxlength="63"><br />
+				<button type="button" onclick="sendWifiDetails()">Save Wifi to EEPROM (Active after Reboot)</button>
+				<button type="button" onclick="sendCommand('wr',1)">Reboot</button><br /><br />
+			</fieldset><br />
+			<fieldset>
+				<legend>Stepper (not saved to EEPROM)</legend>
+				Current: <input id="v" type="range" min="0" max="255" step="1" oninput=sendData(this);><input
+					type="text" id="v_value" readonly value="" style="width:40px"><br />
+				Max speed: <input id="l" type="range" min="100" max="6000" step="10" oninput=sendData(this);><input
+					type="text" id="l_value" readonly value="" style="width:40px"><br /><br />
+			</fieldset><br />
+			<fieldset>
+				<legend>Gyroscope and Accelerometer</legend>
+				Gyro gain (not saved to EEPROM): <input id="j" type="range" min="0.5" max="1.5" step="0.01"
+					oninput=sendData(this);><input type="text" id="j_value" readonly value="" style="width:40px"><br />
+				Gyro filter constant (not saved to EEPROM): <input id="n" type="range" min="0.9" max="1" step="0.001"
+					oninput=sendData(this);><input type="text" id="n_value" readonly value=""
+					style="width:40px"><br /><br />
+				Calibration<br />
+				<button type="button" onclick="sendCommand('k', 1)">Calibrate Gyro and save to EEPROM</button> (Put the
+				robot without any movement to the ground and press the button.<br />
+				<button type="button" onclick="sendCommand('k', 2)">Calibrate ACC (Angle) and save to EEPROM</button>
+				(Put the robot upright on its wheels and push the button ~10 times. For first calibration hold it by
+				hand. When it is self balancing, repeat the calibration a few times without holding it.)<br />
+			</fieldset><br />
+			<fieldset>
+				<legend>Input filtering (not saved to EEPROM)</legend>
+				Speed: <input id="h" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><input type="text"
+					id="h_value" readonly value="" style="width:40px"><br />
+				Steer: <input id="i" type="range" min="0" max="1" step="0.01" oninput=sendData(this);><input type="text"
+					id="i_value" readonly value="" style="width:40px"><br /><br />
+			</fieldset><br />
+			<fieldset>
+				<legend>Other stuff</legend>
+				Battery voltage: <input type="text" id="b" value="" style="width:40px" maxlength="32"> V<br />
+				Battery voltage is not calibrated; ESP32 ADC is not very precise. It provides an indication though.
+				<br /><br />
+			</fieldset>
+		</form>
+	</div>
+	<ul>
+		<li><a href="index.html">Home</a></li>
+		<li><a href="settings.html">Settings</a></li>
+		<li><a href="control.html">Control</a></li>
+		<li><a href="tune.html">Tune</a></li>
+		<li><a href="credits.html">Credits</a></li>
+	</ul>
+
+	<script>
+		// open a websocket to the host
+		var websocket;
+		window.addEventListener('load', onLoad);
+
+		function onLoad(event) {
+			initWebSocket();
+		}
+
+		function initWebSocket() {
+			var gateway = 'ws://' + location.hostname + ':81/';
+			console.log('Trying to open a websocket to ', gateway);
+			websocket = new WebSocket(gateway, ['arduino']);
+			websocket.binaryType = 'arraybuffer';
+			websocket.onopen = onOpen;
+			websocket.onclose = onClose;
+			websocket.onerror = onError;
+			websocket.onmessage = onMessage;
+		}
+
+		var onOpen = function () {
+			console.log('Connection opened');
+		};
+
+		var onClose = function () {
+			console.log('Connection closed');
+			setTimeout(initWebSocket, 2000);
+		};
+
+		var onError = function (error) {
+			console.log('WebSocket Error ', error);
+		};
+
+		var onMessage = function (event) {
+			if (typeof (event.data) == 'string') { // Text frame
+				console.log('Message from server: ', event.data);
+				if (event.data[0] == 'c') {
+					cmd = event.data.substr(0, 3);
+					val = event.data.substr(3);
+				} else if (event.data[0] == 'w') {
+					var str = event.data.substr(1);
+					parseWifiCommand(str);
+				} else {
+					cmd = event.data.substr(0, 1);
+					val = event.data.substr(1);
+				}
+				var e = document.getElementById(cmd);
+				e.value = parseFloat(val);
+				updateSliderText(e);
+			} else { // Binary
+			}
+		};
+
+		function updateSliderText(e) {
+			document.getElementById(e.id + '_value').value = e.value;  // update slider-value in textfield
+		}
+
+		function sendData(e) {
+			// var id = event.target.id;
+			// var val = parseFloat(document.getElementById(id).value).toString(10);
+			var val = e.value;
+			var val2 = e.id + val + 'x';
+			console.log(val2);
+			websocket.send(val2);
+			updateSliderText(e);
+		}
+
+		function sendCommand(cmd, val) {
+			var text = cmd + val + 'x';
+			console.log(text);
+			websocket.send(text);
+		}
+
+		function sendWifiDetails() {
+			/*
+			Check if fields are non-empty. Key should be longer than 8 characters.
+			*/
+			var ssid = document.getElementById('WifiSSID').value;
+			var key = document.getElementById('WifiKey').value;
+			sendCommand('ws', ssid);
+			sendCommand('wk', key);
+		}
+
+		function parseWifiCommand(cmdStr) {
+			var cmd = cmdStr.substr(0, 1);
+			var str = cmdStr.substr(1);
+
+			switch (cmd) {
+				case 'l': // Received list of WiFi networks
+					var strSplit = str.split(",");
+
+					var select = document.getElementById("SSIDlist");
+					var length = select.options.length;
+
+					// Remove old options
+					for (i = 0; i < length; i++) {
+						select.options[i] = null;
+					}
+					// Add newly received list
+					console.log(strSplit.lenth);
+					for (i = 0; i < strSplit.length; i++) {
+						var c = document.createElement("option");
+						c.text = strSplit[i];
+						select.options.add(c);
+					}
+					break;
+				case 's':
+					// Wifi SSID
+					var e = document.getElementById('WifiSSID');
+					e.value = str;
+					break;
+				case 'k':
+					// Wifi key
+					var e = document.getElementById('WifiKey');
+					e.value = str;
+					break;
+				case 'n':
+					// Wifi hostname
+					var e = document.getElementById('wn');
+					e.value = str;
+					break;
+				case 'm':
+					// Wifi mode (AP/SSID)
+					var e = document.getElementsByName('wm');
+					e[parseInt(str)].checked = true;
+					break;
+			}
+		}
+
+		function selectWifiFromList(str) {
+			e = document.getElementById("WifiSSID");
+			e.value = str;
+		}
+	</script>
+</body>
+
+</html>
