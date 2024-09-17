@@ -172,7 +172,7 @@ void WebUI_loop()
             {
                 struct
                 {
-                    uint8_t cmd = 255;
+                    uint8_t cmd;
                     uint8_t fill1;
                     uint8_t fill2;
                     uint8_t fill3;
@@ -181,6 +181,7 @@ void WebUI_loop()
                 uint8_t b[56];
             } plotData;
 
+            plotData.cmd = 255;
             plotData.f[0] = micros() / 1000000.0;
             plotData.f[1] = accAngle;
             plotData.f[2] = filterAngle;
@@ -195,7 +196,6 @@ void WebUI_loop()
             plotData.f[11] = pidSpeedOutput;
             plotData.f[12] = motLeft.speed;
             plotData.f[13] = motRight.speed;
-            // plotData.f[11] = microStep;
             wsServer.sendBIN(0, plotData.b, sizeof(plotData.b));
         }
     }
@@ -253,7 +253,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     case WStype_BIN:
     {
         // DB_PRINTF("[%u] get binary length: %u\n", num, length);
-
         if (length == 6)
         {
             cmd c;
