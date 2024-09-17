@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+	<head>
+
+	<style>
+		.myDiv {
+			background-color: lightgrey;
+			width: 600px;
+			border: 10px solid green;
+			padding: 25px;
+			margin: 25px;
+		}
+	</style>
+
+	<script>
+		var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']);
+		connection.binaryType = 'arraybuffer';
+		connection.onopen = function () {
+			<!-- connection.send('Connect ' + new Date());  -->
+		};
+		connection.onerror = function (error) {
+			console.log('WebSocket Error ', error);
+		};
+		connection.onmessage = function (e) {
+		  if (typeof(e.data)=='string') { // Text frame
+	  		console.log('Server: ', e.data);
+	  		if (e.data[0]=='c') {
+	  		  cmd = e.data.substr(0,3);
+	  		  val = e.data.substr(3);
+	  		} else if (e.data[0]=='w') {
+	  		  var str = e.data.substr(1);
+	  		  parseWifiCommand(str);
+	  		} else {
+	  		  cmd = e.data.substr(0,1);
+	  		  val = e.data.substr(1);
+	  		}
+	  		document.getElementById(cmd).value = parseFloat(val);
+		  } else { // Binary
+		  }
+		};
+		function updateSliderText(e) {
+			document.getElementById(e.id+'_value').value=e.value;  // update slider-value in textfield
+		}
+		function sendData(e) {
+		 // var id = event.target.id;
+		 // var val = parseFloat(document.getElementById(id).value).toString(10);
+		  var val = e.value;
+		  var val2 = e.id + val + 'x';
+		  console.log(val2);
+		  connection.send(val2);
+			updateSliderText(e);
+		}
+		function sendCommand(cmd, val) {
+	    var text = cmd + val + 'x';
+	    console.log(text);
+	    connection.send(text);
+	  }
+	  function sendWifiDetails() {
+	    /*
+	    Check if fields are non-empty. Key should be longer than 8 characters.
+	    */
+	    var ssid = document.getElementById('WifiSSID').value;
+	    var key = document.getElementById('WifiKey').value;
+	    sendCommand('ws', ssid);
+	    sendCommand('wk', key);
+	  }
+	  function parseWifiCommand(cmdStr) {
+	    var cmd = cmdStr.substr(0,1);
+	    var str = cmdStr.substr(1);
+
+	    switch (cmd) {
+	      case 'l': // Received list of WiFi networks
+	        var strSplit = str.split(",");
+
+	        var select = document.getElementById("SSIDlist");
+	        var length = select.options.length;
+
+	        // Remove old options
+	        for (i = 0; i < length; i++) {
+	          select.options[i] = null;
+	        }
+	        // Add newly received list
+	        console.log(strSplit.lenth);
+	        for (i=0; i<strSplit.length; i++) {
+	          var c = document.createElement("option");
+	          c.text = strSplit[i];
+	          select.options.add(c);
+	        }
+	        break;
+	      case 's':
+	        var e = document.getElementById('WifiSSID');
+	        e.value = str;
+	        break;
+	      case 'n':
+	        var e = document.getElementById('wn');
+	        e.value = str;
+	        break;
+	      case 'm':
+	        var e = document.getElementsByName('wm');
+	        e[parseInt(str)].checked = true;
+	        break;
+				case 'b':
+					var e = document.getElementById('wb');
+					e.value = str;
+					break;
+	    }
+	  }
+	  function selectWifiFromList(str) {
+	    e = document.getElementById("WifiSSID");
+	    e.value = str;
+	  }
+	</script>
+
+	<title>Balancing robot interface</title>
+
+	</head>
+
+<body>
+<div class="myDiv">
+	<h1>Balancing Robot interface</h1>
+	<form>
+		<fieldset>
+		<legend>Basic information</legend>
+			Battery voltage: <input type="text" id="b" value="" style="width:40px" maxlength="32"> V<br />
+			Battery voltage is not calibrated; ESP32 ADC is not very precise. It provides an indication though. <br /><br />
+			Robot BT MAC address<br /><input type="text" id="wb" value="" style="width:400px" maxlength="32"><br /><br />
+			Robot name (active after reboot)<br /><input type="text" id="wn" value="" style="width:400px" maxlength="32"><br />
+			<button type="button" onclick="sendCommand('wn', document.getElementById('wn').value) ">Save name to EEPROM (Active after Reboot)</button>
+			<button type="button" onclick="sendCommand('wr',1)">Reboot</button>
+		</fieldset>
+		<fieldset>
+			<legend>Links to other pages</legend>
+			<a href="plotTest.htm">Plotting interface</a><br />
+			<a href="simpletuning.htm">Simple tuning interface</a><br />
+			<a href="index3.htm">More elaborate interface</a><br />
+			<a href="control.htm">Robot control</a><br />
+		</fieldset>
+	</form>
+</div>
+
+</body>
+</html>

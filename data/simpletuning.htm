@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+	<style>
+		.myDiv {
+			background-color: lightgrey;
+			width: 600px;
+			border: 10px solid green;
+			padding: 25px;
+			margin: 25px;
+		}
+		</style>
+
+	<script>
+	var connection = new WebSocket('ws://'+location.hostname+':81/', ['arduino']);
+	connection.binaryType = 'arraybuffer';
+	connection.onopen = function () {
+		<!-- connection.send('Connect ' + new Date());  -->
+	};
+	connection.onerror = function (error) {
+		console.log('WebSocket Error ', error);
+	};
+	connection.onmessage = function (e) {
+	  if (typeof(e.data)=='string') { // Text frame
+  		console.log('Server: ', e.data);
+  		if (e.data[0]=='c') {
+  		  cmd = e.data.substr(0,3);
+  		  val = e.data.substr(3);
+  		} else if (e.data[0]=='w') {
+  		  var str = e.data.substr(1);
+  		  parseWifiCommand(str);
+  		} else {
+  		  cmd = e.data.substr(0,1);
+  		  val = e.data.substr(1);
+  		}
+  		e = document.getElementById(cmd);
+  		e.value = parseFloat(val);
+		  updateSliderText(e);
+	  } else { // Binary
+	  }
+	};
+	function updateSliderText(e) {
+		document.getElementById(e.id+'_value').value=e.value;  // update slider-value in textfield
+	}
+	function sendData(e) {
+	 // var id = event.target.id;
+	 // var val = parseFloat(document.getElementById(id).value).toString(10);
+	  var val = e.value;
+	  var val2 = e.id + val + 'x';
+	  console.log(val2);
+	  connection.send(val2);
+		updateSliderText(e);
+	}
+	function sendCommand(cmd, val) {
+    var text = cmd + val + 'x';
+    console.log(text);
+    connection.send(text);
+  }
+	</script>
+	<title>Balancing robot interface</title>
+</head>
+
+<body>
+<div class="myDiv">
+	<form>
+		<fieldset>
+			<legend>PID tuning</legend>
+			Position controller:<br />
+			Proportional gain: <input id="c2p" type="range" min="0" max="10" step="0.1" oninput=sendData(this);><input type="text" id="c2p_value" readonly value="" style="width:40px"><br />
+			Derivative gain: <input id="c2d" type="range" min="0" max="5" step="0.1" oninput=sendData(this);><input type="text" id="c2d_value" readonly value="" style="width:40px"><br />
+			Maximum angle: <input id="c2m" type="range" min="0" max="50" step="0.1" oninput=sendCommand('c2m',this.value);sendCommand('c2o',this.value);updateSliderText(this);><input type="text" id="c2m_value" readonly value="" style="width:40px"><br />
+		</fieldset>
+		<fieldset>
+		<legend>Other stuff</legend>
+			Battery voltage: <input type="text" id="b" value="" style="width:40px" maxlength="32"> V<br />
+		</fieldset>
+	</form>
+</div>
+</body>
+</html>

@@ -1,14 +1,16 @@
-# BalancingRobot
+This folder contains the software source files, written for an ESP32 using the Arduino framework. PlatformIO is used as environment, as it is very easy to use, and provides somewhat more advanced functions, compared to the very basic Arduino IDE. 
 
-This repository contains all resource files needed to replicate the high speed, two wheeled balancing robot. 
+# Build environment
+For setting up PlatformIO, see https://docs.platformio.org/en/latest/ide/vscode.html. 
 
-For some videos, see my [youtube channel](https://www.youtube.com/watch?v=D7hvI_Tb0o4). 
+Clone the repository. I strongly advice to not download the source files as a zip package, but to use Git properly. The code is very experimental, and will be often updated.
 
-For more info, and future updates, see [my website](http://elexperiment.nl/2018/11/high-speed-balancing-robot-introduction/)
+Once installed, go to PlatformIO home in the IDE. In there, click "Open Project", and navigate to the location where you cloned the repository. Select the "Software" folder, and then click "Open "Software"". 
 
-For Software Setup see [Software/README.md](Software/README.md)
+Open src/main.cpp. You should now be able to combile (ctrl+alt+B).
 
-Please be aware that this code is very experimental / far from complete. So, you'll probably have to implement some stuff yourself. Also, use at your own risk.
+# Uploading firmware
+For uploading, I strongly prefer OTA, as this works very nice in PlatformIO.  
 
 ### Branches
 - master: stable version
@@ -17,23 +19,127 @@ Please be aware that this code is very experimental / far from complete. So, you
 
 I'll try to merge all the branches at some point...
 
-# General instructions
+## A4988 driver
+Beware: when using the A4988 driver, you have to specify a flag. When using any other driver, remove this flag. This is because the A4988 has a different microstepping selection table. 
 
-## IMU calibration
-Once you have everything up and running, the IMU needs to be calibrated. The web interface has two buttons, one for gyroscope and one for accelerometer calibration. 
+## Serial port
+For the first upload, you'll need to upload via USB / the serial port. In platformio.ini, state the COM port under which the ESP32 module is connected (uncomment the line with an IP address / host name), for example 
+upload_port = COM3. 
+; upload_port = balancingRobot.local
 
-The gyroscope has a (small) offset, which is calibrated away with a constant correction factor (for all three axes). Lay the robot flat on the ground, without any movement. Then, click the gyro calibration button.
+Hit the upload button. Currently, the auto reset functionality of the ESP32 module doesn't seem to work, see Issue #10. So, once the message "Serial port COMx" appears, press the enable and boot buttons on the module. First release the boot button, then the enable button. You might have to try a few times. Luckily, once succeeded with the serial upload, you can use OTA upload.
 
-The accelerometer is always placed at a (small, or e.g. 90 degree) angle. By clicking on the second button, the current angle of the robot is used as 0. In other words, the robot should be standing still (without any velocity), due to the position controller bringing the robot to an equilibrium. If you can't get the robot to stand stable, for example because the IMU is placed at a 90 degree offset, lift the robot from the ground, hold it vertically, and then click the button. Afterwards, repeat the "normal" calibration procedure (using the position controller).
+## OTA upload
+When the ESP32 boots, it's IP address is printed. In platformio.ini, fill in this IP address under upload_port. Or, even better, use the hostname balancingRobot.local. This means you don't have to mess around with IP addresses. Make sure to be connected to the same WiFi network as the ESP32, and hit upload.
 
-Both calibration results are stored in the EEPROM automatically.
+*Update*: in the ps3control branch, the ESP32 has insufficient flash memory to store the OTA upload. Hence, it is disabled in this branch. 
 
-## Stepper motor current adjustment
-You'll need to manually adjust the current setting potentiometers on the stepper drivers (unless you use the ESP32 DAC, see PCB readme). 
+## File system
+Initially, or when changing the web page files, you need to upload the file system. To do so, open a terminal within the PlatformIO environment, and run:
+platformio run --target uploadfs
 
-This is done with one stepper driver at a time, such that you can see the current consumption. I use a lab power supply, as it has a current meter built-in. You could also add a multimeter / current meter in series with a battery, for example. So, plug in only one stepper driver, and power on the robot. Never switch stepper drivers (nor the wires to the motors) when powered, magic smoke guaranteed!
+This will upload all content of the data folder to the ESP32 flash memory (either via the serial port or OTA).
 
-Now, use a small screwdriver to adjust the stepper motor current. The "correct" current depends on multiple factors, mostly battery voltage. The higher the voltage, the lower the current draw, as the driver works like a buck regulator. I usually aim for say 0.3 or 0.4A (for one stepper motor) at 12V. The other prominent limit for stepper current is heat: if the drivers get too warm, simply lower stepper current. 
+# WiFi connection
+After flashing, the ESP32 will start an access point (AP), named balancingRobot. The default key is "turboturbo". Once connected, open the balancingRobot web configuration page (index3.htm). Here, among others, you can change the WiFi options. Under "WiFi configuration", enter the SSID and key of your home network, change the selector from "AP" to "SSID", and click the "set" button, followed by the "reboot" button. If all goes well, the ESP32 will now connect to your home network. 
+
+*Update:* I noticed that in the latest version, the web pages are not correctly loaded, when the ESP32 is running in access point mode. When connected to a known SSID, everything works as it should.
+To configure the WiFi settings without a web page, we use the serial interface (115200 baud). 
+The command structure is: \
+a "w" for wireless related settings, followed by a "s" for SSID, "k" for key, and "m" for WiFi mode (0 = access point, 1 = connect to SSID), followed by the content, followed by a terminating "x". The recipe for connecting to a known SSID is thus:\
+wsYOURSSIDx\
+wkYOURKEYx\
+wm1x\
+Restart the ESP32, and it should connect to the known WiFi network ("wrx" will reset the ESP32).\
+The serial interface will print information on whether the connection to a known SSID is successful. If the home network cannot be found, the AP will be started.
+
+# Web page editor
+hostName.local/edit
+
+User/pass: admin, admin
+
+Be aware though that changes here are not kept on your PC, so make sure to copy and paste everything.
+
+# Plotting signals
+hostName.local/plotTest.htm
+
+To be merged into index.htm at some point
+
+For this to work, first load plotTest.htm, then index.htm. This allows to view signals, while simultaneously adjusting parameters. 
+
+# Wifi control
+For a slider based web page to control your robot (this will also work in access point mode)
+
+IPaddress/control.htm
+hostName.local/control.htm
+or, if you connect to the access point of the robot: 192.168.4.1/control.htm
+
+# Bluetooth control
+The ps3control branch supports a ps3 controller. This is convenient, as the ESP32 has bluetooth, and no additional hardware is required. 
+
+To be documented, soon hopefully. Very short: use sixaxispairtool to assign the correct MAC address to the PS3 controller. The MAC address is printed over the serial interface, and is also visible in the web interface. 
+
+The ps3control branch doesn't support OTA anymore, as flash space is limited on the ESP32. 
 
 ## Stepper recommendation
 Use NEMA17 steppers with a hight (without axis) of 50mm and 200 steps per rotation = 1.8 deg. The smaller ones does not work very well.
+
+## Src
+
+Th src folder contains the software source files, written for an ESP32 using the Arduino framework. PlatformIO is used as environment, as it is very easy to use, and provides somewhat more advanced functions, compared to the very basic Arduino IDE. 
+
+# Build environment
+For setting up PlatformIO, see https://docs.platformio.org/en/latest/ide/vscode.html. 
+
+Clone the repository. I strongly advice to not download the source files as a zip package, but to use Git properly. The code is very experimental, and will be often updated.
+
+Once installed, go to PlatformIO home in the IDE. In there, click "Open Project", and navigate to the location where you cloned the repository. Select the "Software" folder, and then click "Open "Software"". 
+
+Open src/main.cpp. You should now be able to combile (ctrl+alt+B).
+
+# Uploading firmware
+For uploading, I strongly prefer OTA, as this works very nice in PlatformIO.  
+
+## Serial port
+For the first upload, you'll need to upload via USB / the serial port. In platformio.ini, state the COM port under which the ESP32 module is connected (uncomment the line with an IP address / host name), for example 
+upload_port = COM3. 
+; upload_port = balancingRobot.local
+
+Hit the upload button. Currently, the auto reset functionality of the ESP32 module doesn't seem to work, see Issue #10. So, once the message "Serial port COMx" appears, press the enable and boot buttons on the module. First release the boot button, then the enable button. You might have to try a few times. Luckily, once succeeded with the serial upload, you can use OTA upload.
+
+## OTA upload
+When the ESP32 boots, it's IP address is printed. In platformio.ini, fill in this IP address under upload_port. Or, even better, use the hostname balancingRobot.local. This means you don't have to mess around with IP addresses. Make sure to be connected to the same WiFi network as the ESP32, and hit upload.
+
+## File system
+Initially, or when changing the web page files, you need to upload the file system. To do so, open a terminal within the PlatformIO environment, and run:
+platformio run --target uploadfs
+
+This will upload all content of the data folder to the ESP32 flash memory (either via the serial port or OTA).
+
+# WiFi connection
+After flashing, the ESP32 will start an access point (AP), named balancingRobot. The default key is "turboturbo". Once connected, open the balancingRobot web configuration page. Here, among others, you can change the WiFi options. Under "WiFi configuration", enter the SSID and key of your home network, change the selector from "AP" to "SSID", and click the "set" button, followed by the "reboot" button. If all goes well, the ESP32 will now connect to your home network. 
+
+If you are using an IP address instead of host name, don't forget to check the ESP32's IP address, and update this in platformio.ini. It is probably wise to assign a fixed IP address to the ESP32 (via the router).
+
+If the home network cannot be found, the AP will be started.
+
+# Web page editor
+hostName.local/edit
+
+User/pass: admin, admin
+
+Be aware though that changes here are not kept on your PC, so make sure to copy and paste everything.
+
+# Plotting signals
+hostName.local/plotTest.htm
+
+To be merged into index.htm
+
+For this to work, first load plotTest.htm, then index.htm. This allows to view signals, while simultaneously adjusting parameters. 
+
+# Wifi control
+For a slider based web page to control your robot
+
+hostName.local/control.htm
+
+
