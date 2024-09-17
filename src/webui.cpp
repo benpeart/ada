@@ -117,7 +117,7 @@ bool WebUI_setup()
     }
 
     // setup the Async Web Server
-    httpServer.serveStatic("/", SPIFFS, "/").setDefaultFile("index.htm");
+    httpServer.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
     httpServer.onNotFound([](AsyncWebServerRequest *request)
                           { request->send(404, "text/plain", "FileNotFound"); });
 #ifdef SPIFFSEDITOR

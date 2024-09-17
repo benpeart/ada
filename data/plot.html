@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Ada Real-Time Chart</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: white;
+            color: black;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: black;
+                color: white;
+            }
+        }
+
+        ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #333;
+        }
+
+        li {
+            float: left;
+        }
+
+        li a {
+            display: block;
+            color: white;
+            text-align: center;
+            padding: 14px 16px;
+            text-decoration: none;
+        }
+
+        li a:hover {
+            background-color: #111;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="lineChart" width="400" height="200"></canvas>
+
+    <button name="plotStart" onclick=onStart(this); style="width:80px">Start</button>
+    <button name="plotStop" onclick=onStop(this); style="width:80px">Stop</button><br /><br />
+
+    <table>
+        <tr>
+            <td>
+                <fieldset style="width:300px">
+                    <legend>Plot control</legend>
+
+                    Sample rate [Hz]:<br />
+                    <input type="radio" name="sampleRate" onclick=onSampleRate(this); value="8">25
+                    <input type="radio" name="sampleRate" onclick=onSampleRate(this); value="4" checked>50
+                    <input type="radio" name="sampleRate" onclick=onSampleRate(this); value="2">100
+                    <input type="radio" name="sampleRate" onclick=onSampleRate(this); value="1">200<br /><br />
+
+                    Signals to plot<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>accelerometer angle<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>accelerometer + gyro
+                    angle<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this); checked>PID angle
+                    setpoint<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this); checked>PID angle input<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>PID angle output<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>PID position setpoint<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>PID position input<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>PID position output<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>PID speed setpoint<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>PID speed input<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>PID speed output<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>Left motor speed<br />
+                    <input type="checkbox" name="plotOption" onchange=onPlotOption(this);>Right motor speed<br />
+                </fieldset>
+            </td>
+            <td style="vertical-align: top;">
+                <fieldset style="width:300px">
+                    <legend>Logging</legend>
+                    <input type="checkbox" id="logEnable">Enable logging<br /><br />
+                    Time elapsed [s]: <label id="logDuration">0</label><br /><br />
+                    <button id="logClear" onclick="clearLogData()">Clear</button>
+                    <button id="logExport" onclick="exportLogData()">Export</button>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Other stuff</legend>
+                    Battery voltage: <input type="text" id="b" value="" style="width:40px" maxlength="32"> V<br />
+                </fieldset>
+            </td>
+        </tr>
+    </table>
+    <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="plot.html">Plot</a></li>
+        <li><a href="tune.html">Tune</a></li>
+        <li><a href="control.html">Control</a></li>
+        <li><a href="credits.html">Credits</a></li>
+    </ul>
+    <script>
+
+        // logging data
+        var nSignal = 12;
+        var sampleRate = 4;
+        var settingList = [];
+        var logData = new Array(nSignal);
+        for (var i = 0; i < nSignal; i++) logData[i] = new Array;
+
+        //
+        // Create the chart
+        //
+
+        const canvas = document.getElementById('lineChart');
+        const ctx = canvas.getContext('2d');
+
+        const data = {
+            labels: [],
+            datasets: [{
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(0, 0, 128, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(0, 128, 0, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(0, 128, 128, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(128, 0, 0, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(128, 0, 128, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(128, 128, 0, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(128, 128, 128, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(0, 0, 192, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(0, 192, 0, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(0, 192, 192, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(192, 0, 0, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(192, 0, 192, 1)',
+                fill: false,
+                hidden: false,
+            }, {
+                label: '',
+                data: [],
+                tension: 0.4,
+                borderColor: 'rgba(192, 192, 0, 1)',
+                fill: false,
+                hidden: false,
+            }
+            ],
+        }
+
+        const config = {
+            type: 'line',
+            data: data,
+            options: {
+                responsive: true,
+                animation: false, // Disable animation for real-time updates
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        }
+
+        //
+        // Chart helper functions
+        //
+
+        // update the chart labels to match what is in the html
+        function updateChartLabels() {
+            var plotOptions = document.getElementsByName("plotOption");
+            var plotOptionLength = plotOptions.length;
+            for (var i = 0; i < plotOptionLength; i++) {
+                var label = plotOptions[i].nextSibling.textContent.trim();
+                data.datasets[i].label = label;
+            }
+        }
+
+        // remove the oldest data from each dataset
+        function removeData(chart, update = true) {
+            chart.data.labels.splice(0, 1);
+            chart.data.datasets.forEach((dataset) => {
+                dataset.data.splice(0, 1);
+            });
+            if (update)
+                chart.update();
+        }
+
+        // show or hide the given dataset
+        function setVisibility(chart, index, hidden = false) {
+            chart.getDatasetMeta(index).hidden = hidden;
+        }
+
+        // hide any signals are not to be plotted
+        var onPlotOption = function (e) {
+            var plotOptions = document.getElementsByName("plotOption");
+            var plotOptionLength = plotOptions.length;
+
+            for (var i = 0; i < plotOptionLength; i++) {
+                lineChart.getDatasetMeta(i).hidden = !plotOptions[i].checked;
+            }
+            lineChart.update();
+        }
+
+        // create the chart
+        updateChartLabels();
+        const lineChart = new Chart(ctx, config);
+
+        // initialize the signals to we want to plot based on what is checked
+        onPlotOption(this);
+
+        //
+        // Commands to be sent back to the host
+        //
+
+        // send start command to the host
+        var onStart = function (e) {
+            websocket.send("pe1x");
+        }
+
+        // send stop command to the host
+        var onStop = function (e) {
+            websocket.send("pe0x");
+        }
+
+        // send sample rate to the host
+        var onSampleRate = function (e) {
+            sampleRate = e.value;
+            websocket.send("pp" + e.value + "x");
+        }
+
+        // pass an array of data to be added to each item in the dataset
+        function addData(chart, data) {
+            // only show the latest 256 data points in chart
+            if (chart.data.labels.length >= 256) {
+                removeData(chart, false)
+            };
+            chart.data.labels.push(chart.data.labels.length);
+            chart.data.datasets.forEach((dataset, index) => {
+                dataset.data.push(data[index]);
+            });
+            chart.update();
+        }
+
+        // open a websocket to the host
+        var websocket;
+        window.addEventListener('load', onLoad);
+
+        function onLoad(event) {
+            initWebSocket();
+        }
+
+        function initWebSocket() {
+            var gateway = 'ws://' + location.hostname + ':81/';
+            console.log('Trying to open a websocket to ', gateway);
+            websocket = new WebSocket(gateway, ['arduino']);
+            websocket.binaryType = 'arraybuffer';
+            websocket.onopen = onOpen;
+            websocket.onclose = onClose;
+            websocket.onerror = onError;
+            websocket.onmessage = onMessage;
+        }
+
+        var onOpen = function () {
+            console.log('Connection opened');
+        };
+
+        var onClose = function () {
+            console.log('Connection closed');
+            setTimeout(initWebSocket, 2000);
+        };
+
+        var onError = function (error) {
+            console.log('WebSocket Error ', error);
+        };
+
+        var onMessage = function (event) {
+            console.log('Message from server:', event.data);
+            if (typeof (event.data) == 'string') {
+                settingList.push(event.data);
+            } else {
+                // Binary format is array of floats in binary/DataView format
+                var d = event.data;
+                var dv = new DataView(d);
+                let newData = [];
+
+                // update the chart
+                for (var i = 0; i < 12; i++) {
+                    var val = dv.getFloat32(i * 4, true);
+                    newData[i] = val;
+
+                    // update the log
+                    if (document.getElementById('logEnable').checked) {
+                        logData[i].push(val);
+                        document.getElementById('logDuration').innerHTML = Number(logData[0].length / sampleRate).toFixed(2);
+                    }
+                }
+                addData(lineChart, newData);
+            }
+        };
+
+        var exportLogData = function () {
+            var l = logData[0].length;
+
+            if (l > 0) {
+                var csvFile = '';
+
+                // Add header with all settings
+                for (var i = 0; i < settingList.length; i++) {
+                    csvFile += settingList[i];
+                    if (i < settingList.length) csvFile += ',';
+                }
+                for (var i = 0; i < l; i++) {
+                    for (var j = 0; j < nSignal; j++) {
+                        // logData.forEach(function(x) {
+                        // console.log(x.length)
+                        var x = logData[j];
+                        var val = x[i];
+                        // csvFile += val.toString() + ',';
+                        csvFile += Number(logData[j][i]).toFixed(6);
+                        if (j < nSignal - 1) csvFile += ',';
+                    }
+                    csvFile += '\n';
+                }
+                // console.log(logData[0][0].toFixed(5))
+
+                var filename = 'logData.csv';
+                var blob = new Blob([csvFile], { type: 'text/csv;charset=utf-8;' });
+                if (navigator.msSaveBlob) { // IE 10+
+                    navigator.msSaveBlob(blob, filename);
+                } else {
+                    var link = document.createElement("a");
+                    if (link.download !== undefined) { // feature detection
+                        // Browsers that support HTML5 download attribute
+                        var url = URL.createObjectURL(blob);
+                        link.setAttribute("href", url);
+                        link.setAttribute("download", filename);
+                        link.style.visibility = 'hidden';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                }
+            }
+        }
+
+        var clearLogData = function () {
+            for (var i = 0; i < nSignal; i++) logData[i] = [];
+            document.getElementById('logDuration').innerHTML = '0';
+        }
+    </script>
+</body>
+
+</html>

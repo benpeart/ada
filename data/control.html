@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="viewport" content="target-densitydpi=device-dpi; user-scalable=no;" />
+
+  <title>Driving Miss Ada</title>
+  <style>
+    body {
+      background-color: white;
+      color: black;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: black;
+        color: white;
+      }
+    }
+
+    ul {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #333;
+    }
+
+    li {
+      float: left;
+    }
+
+    li a {
+      display: block;
+      color: white;
+      text-align: center;
+      padding: 14px 16px;
+      text-decoration: none;
+    }
+
+    li a:hover {
+      background-color: #111;
+    }
+  </style>
+
+  <style>
+    html {
+      touch-action: manipulation;
+      /* Improves responsiveness on touch device */
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      /*transform: rotate(270deg); */
+      width: 350px;
+      height: 100px;
+      margin: 150px 0 0 0;
+    }
+
+    input[type=range]:focus {
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 100px;
+      /*cursor: pointer;*/
+      /*box-shadow: 1px 1px 1px #000000, 0px 0px 1px #0d0d0d;*/
+      background: #3071a9;
+      /*border-radius: 1.3px;*/
+      /*border: 0.2px solid #010101;*/
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      /*box-shadow: 1px 1px 1px #000000, 0px 0px 1px #0d0d0d;*/
+      border: 1px solid #000000;
+      height: 100%;
+      width: 60px;
+      border-radius: 3px;
+      background: #ffffff;
+      /*cursor: pointer;*/
+      -webkit-appearance: none;
+      /*margin-top: -14px; */
+    }
+
+    input[type=range]:focus::-webkit-slider-runnable-track {
+      background: #367ebd;
+    }
+  </style>
+</head>
+
+<body>
+  <input type="range" min="-100" max="100" step="1" oninput="sendCommand(100,0,-this.value)"
+    onmouseup="resetValue(this,100,0)" ontouchend="resetValue(this,100,0)" style="transform:rotate(270deg);">
+  <input type="range" min="-100" max="100" step="1" oninput="sendCommand(100,1,-this.value)"
+    onmouseup="resetValue(this,100,1)" ontouchend="resetValue(this,100,1)">
+  <button type="button" onclick="sendCommand(100,2,0)" style="height:100px;width:100px">Self right</button>
+  <button type="button" onclick="sendCommand(100,3,0)" style="height:100px;width:100px">Disable</button><br />
+  <br><br><br><br><br><br>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="plot.html">Plot</a></li>
+    <li><a href="tune.html">Tune</a></li>
+    <li><a href="control.html">Control</a></li>
+    <li><a href="credits.html">Credits</a></li>
+  </ul>
+
+
+  <script>
+
+    var websocket;
+    window.addEventListener('load', onLoad);
+
+    function onLoad(event) {
+      initWebSocket();
+    }
+
+    function initWebSocket() {
+      var gateway = 'ws://' + location.hostname + ':81/';
+      console.log('Trying to open a websocket to ', gateway);
+      websocket = new WebSocket(gateway, ['arduino']);
+      websocket.binaryType = 'arraybuffer';
+      websocket.onopen = onOpen;
+      websocket.onclose = onClose;
+      websocket.onerror = onError;
+      websocket.onmessage = onMessage;
+    }
+
+    var onOpen = function () {
+      console.log('Connection opened');
+    };
+
+    var onClose = function () {
+      console.log('Connection closed');
+      setTimeout(initWebSocket, 2000);
+    };
+
+    var onError = function (error) {
+      console.log('WebSocket Error ', error);
+    };
+
+    var onMessage = function (e) {
+      if (typeof (e.data) == 'string') { // Text frame
+        console.log('Server: ', e.data);
+      } else { // Binary frame
+        var dv = new DataView(e.data);
+        var grp = dv.getUint8(0);
+        var cmd = dv.getUint8(1);
+        var val = dv.getFloat32(2, true);
+        console.log(grp + ' ' + cmd + ' ' + val);
+        //        parseValue(grp, cmd, val);
+      }
+    };
+
+    function sendCommand(grp, cmd, val) {
+      var buf = new ArrayBuffer(6);
+      var dv = new DataView(buf);
+      dv.setUint8(0, grp);
+      dv.setUint8(1, cmd);
+      dv.setFloat32(2, val, true);
+      console.log(buf);
+      websocket.send(buf);
+    }
+
+    function resetValue(e, grp, cmd) {
+      e.value = 0;
+      sendCommand(grp, cmd, 0);
+    }
+  </script>
+</body>
