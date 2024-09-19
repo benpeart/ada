@@ -23,16 +23,9 @@ WebSocketsServer wsServer = WebSocketsServer(81);
 
 plotType plot;
 
-void sendConfigurationData(uint8_t num);
-
-bool WebUI_setup()
+void connectToWifi()
 {
-    // Read robot name
-    preferences.getString("robot_name", robotName, sizeof(robotName));
-    DB_PRINTLN(robotName);
-
-    // Connect to Wifi and setup OTA if known Wifi network cannot be found
-    WiFi.setHostname(robotName);
+    // Connect to Wifi and setup AP if known Wifi network cannot be found
     boolean wifiConnected = 0;
     if (preferences.getUInt("wifi_mode", 1) == 1)
     {
@@ -40,6 +33,7 @@ bool WebUI_setup()
         char key[63] = "";
         preferences.getString("wifi_ssid", ssid, sizeof(ssid));
         preferences.getString("wifi_key", key, sizeof(key));
+
         DB_PRINTF("Connecting to '%s'\n", ssid);
         WiFi.mode(WIFI_STA);
         WiFi.begin(ssid, key);
@@ -62,7 +56,19 @@ bool WebUI_setup()
         WiFi.softAP(robotName);
         DB_PRINTF("AP named '%s' started, IP address: %s\n", WiFi.softAPSSID(), WiFi.softAPIP().toString());
     }
+}
 
+bool WebUI_setup()
+{
+    // Read robot name
+    preferences.getString("robot_name", robotName, sizeof(robotName));
+    DB_PRINTLN(robotName);
+    WiFi.setHostname(robotName);
+
+    // Connect to Wifi and setup AP if known Wifi network cannot be found
+    connectToWifi();
+
+    // Setup for OTA updates
     ArduinoOTA.setHostname(robotName);
     ArduinoOTA
         .onStart([]()
@@ -92,7 +98,7 @@ bool WebUI_setup()
     ArduinoOTA.begin();
     DB_PRINTLN("Ready for OTA updates");
 
-    // Start DNS server
+    // Start MDNS server
 #ifdef MDNS
     if (MDNS.begin(robotName))
     {
@@ -140,12 +146,30 @@ void WebUI_loop()
 {
     static uint8_t k = 0;
 
+    if ((WiFi.status() != WL_CONNECTED))
+    {
+        DB_PRINTLN(F("\nWiFi lost. Attempting to reconnect"));
+        connectToWifi();
+    }
+
     // Measure battery voltage, and send to connected client(s), if any
 #ifdef BATTERY_VOLTAGE
-    float newBatteryVoltage = 0; // analogRead(PIN_BATTERY_VOLTAGE);
-    uint32_t reading = adc1_get_raw(ADC_CHANNEL_BATTERY_VOLTAGE);
-    uint32_t voltage = esp_adc_cal_raw_to_voltage(reading, &adc_chars);
-    avgBatteryVoltage = avgBatteryVoltage * BATTERY_VOLTAGE_FILTER_COEFFICIENT + (voltage / 1000.0) * BATTERY_VOLTAGE_SCALING_FACTOR * (1 - BATTERY_VOLTAGE_FILTER_COEFFICIENT);
+    const float R1 = 100000.0;        // 100kΩ
+    const float R2 = 10000.0;         // 10kΩ
+    const float ADC_MAX = 4095.0;     // 12-bit ADC
+    const float V_REF = 3.3;          // Reference voltage
+    const float ALPHA = 0.05;         // low pass filter
+    static float filteredBattery = 0; // use a low-pass filter to smooth battery readings
+
+    int adcValue = analogRead(PIN_BATTERY_VOLTAGE);
+    float voltage = (adcValue / ADC_MAX) * V_REF;
+    float batteryVoltage = voltage * (R1 + R2) / R2;
+
+    // take the first and filter the rest
+    if (!filteredBattery)
+        filteredBattery = batteryVoltage;
+    else
+        filteredBattery = (ALPHA * batteryVoltage) + ((1 - ALPHA) * filteredBattery);
 
     // Send battery voltage readout periodically to web page, if any clients are connected
     static unsigned long tLastBattery;
@@ -155,7 +179,7 @@ void WebUI_loop()
         {
             char wBuf[10];
 
-            sprintf(wBuf, "b%.1f", avgBatteryVoltage);
+            sprintf(wBuf, "b%.1f", filteredBattery);
             wsServer.broadcastTXT(wBuf);
         }
         tLastBattery = tNowMs;
@@ -232,68 +256,6 @@ void sendWifiList(void)
     wsServer.sendTXT(0, wBuf);
 }
 
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
-{
-    switch (type)
-    {
-    case WStype_DISCONNECTED:
-        DB_PRINTF("[%u] Disconnected!\n", num);
-        break;
-    case WStype_CONNECTED:
-    {
-        IPAddress ip = wsServer.remoteIP(num);
-        DB_PRINTF("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-        sendConfigurationData(num);
-    }
-    break;
-    case WStype_TEXT:
-        DB_PRINTF("[%u] get Text: %s\n", num, payload);
-        parseCommand((char *)payload, length);
-        break;
-    case WStype_BIN:
-    {
-        // DB_PRINTF("[%u] get binary length: %u\n", num, length);
-        if (length == 6)
-        {
-            cmd c;
-            memcpy(c.arr, payload, 6);
-            // Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
-            if (c.grp == 100)
-            {
-                switch (c.cmd)
-                {
-                case 0:
-                    remoteControl.speed = c.val;
-                    break;
-                case 1:
-                    remoteControl.steer = c.val;
-                    break;
-                case 2:
-                    remoteControl.selfRight = 1;
-                    break;
-                case 3:
-                    remoteControl.disableControl = 1;
-                    break;
-                }
-                // if (c.cmd==0) {
-                //   remoteControl.speed = c.val;
-                // } else if (c.cmd==1) {
-                //   remoteControl.steer = c.val;
-                // }
-            }
-        }
-
-        break;
-    }
-    case WStype_ERROR:
-    case WStype_FRAGMENT_TEXT_START:
-    case WStype_FRAGMENT_BIN_START:
-    case WStype_FRAGMENT:
-    case WStype_FRAGMENT_FIN:
-        break;
-    }
-}
-
 void sendConfigurationData(uint8_t num)
 {
     // send message to client
@@ -361,4 +323,66 @@ void sendConfigurationData(uint8_t num)
     wsServer.sendTXT(num, wBuf);
     sprintf(wBuf, "wn%s", robotName);
     wsServer.sendTXT(num, wBuf);
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
+{
+    switch (type)
+    {
+    case WStype_DISCONNECTED:
+        DB_PRINTF("[%u] Disconnected!\n", num);
+        break;
+    case WStype_CONNECTED:
+    {
+        IPAddress ip = wsServer.remoteIP(num);
+        DB_PRINTF("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+        sendConfigurationData(num);
+    }
+    break;
+    case WStype_TEXT:
+        DB_PRINTF("[%u] get Text: %s\n", num, payload);
+        parseCommand((char *)payload, length);
+        break;
+    case WStype_BIN:
+    {
+        // DB_PRINTF("[%u] get binary length: %u\n", num, length);
+        if (length == 6)
+        {
+            cmd c;
+            memcpy(c.arr, payload, 6);
+            // Serial << "Binary: " << c.grp << "\t" << c.cmd << "\t" << c.val << "\t" << sizeof(cmd) << endl;
+            if (c.grp == 100)
+            {
+                switch (c.cmd)
+                {
+                case 0:
+                    remoteControl.speed = c.val;
+                    break;
+                case 1:
+                    remoteControl.steer = c.val;
+                    break;
+                case 2:
+                    remoteControl.selfRight = 1;
+                    break;
+                case 3:
+                    remoteControl.disableControl = 1;
+                    break;
+                }
+                // if (c.cmd==0) {
+                //   remoteControl.speed = c.val;
+                // } else if (c.cmd==1) {
+                //   remoteControl.steer = c.val;
+                // }
+            }
+        }
+
+        break;
+    }
+    case WStype_ERROR:
+    case WStype_FRAGMENT_TEXT_START:
+    case WStype_FRAGMENT_BIN_START:
+    case WStype_FRAGMENT:
+    case WStype_FRAGMENT_FIN:
+        break;
+    }
 }

@@ -65,6 +65,9 @@ void onPs3Disconnect()
 }
 void Ps3_setup()
 {
+    // BT MAC
+    char BTaddress[20] = "00:00:00:00:00:00";
+
     // Ps3.begin("24:0a:c4:31:3d:86");
     Ps3.attach(onPs3Notify);
     Ps3.attachOnConnect(onPs3Connect);

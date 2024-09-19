@@ -16,6 +16,35 @@
 extern plotType plot;
 #endif // WEBUI
 
+// ESP32 Pin Assignments
+
+// -- Stepper motor pin assignments
+#define motEnablePin 19
+
+#define motLeftUStepPin1 18
+#define motLeftUStepPin2 05
+#define motLeftStepPin 33
+#define motLeftDirPin 32
+
+#define motRightUStepPin1 04
+#define motRightUStepPin2 27
+#define motRightStepPin 26
+#define motRightDirPin 25
+
+// -- Others
+#define PIN_BATTERY_VOLTAGE 36 // ADC pin connected to voltage divider
+
+#define PIN_I2C_SDA 21
+#define PIN_I2C_SCL 22
+
+#ifdef LED_PINS
+#define PIN_LED 32
+#define PIN_LED_LEFT 33
+#define PIN_LED_RIGHT 26
+#endif // LED_PINS
+
+
+
 void parseCommand(char *data, uint8_t length);
 
 extern Preferences preferences;
@@ -38,7 +67,6 @@ extern float pidPosOutput;
 extern float pidSpeedOutput;
 extern float speedFilterConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 extern float steerFilterConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
-extern char BTaddress[];
 
 /*  Remote control structure
     Every remote should give a speed and steer command from -100 ... 100

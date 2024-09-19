@@ -27,10 +27,6 @@ Also, you have to publish all modifications.
 #ifdef INPUT_XBOX
 #include "xbox.h"
 #endif // INPUT_XBOX
-#ifdef BATTERY_VOLTAGE
-#include "driver/adc.h"
-#include "esp_adc_cal.h"
-#endif // BATTERY_VOLTAGE
 
 // Driving behaviour
 float speedFactor = 0.7;         // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
@@ -61,19 +57,7 @@ Preferences preferences;
 #define PREF_NAMESPACE "pref"
 #define PREF_KEY_VERSION "ver"
 
-// -- Stepper motor pin assignments
-#define motEnablePin 19
-
-#define motLeftUStepPin1 18
-#define motLeftUStepPin2 05
-#define motLeftStepPin 33
-#define motLeftDirPin 32
-
-#define motRightUStepPin1 04
-#define motRightUStepPin2 27
-#define motRightStepPin 26
-#define motRightDirPin 25
-
+// -- Stepper motor
 fastStepper motLeft(motLeftStepPin, motLeftDirPin, 0, motLeftTimerFunction);
 fastStepper motRight(motRightStepPin, motRightDirPin, 1, motRightTimerFunction);
 
@@ -124,25 +108,6 @@ float filterAngle = 0;
 float angleOffset = 2.0;
 float gyroFilterConstant = 0.996;
 float gyroGain = 1.0;
-
-// -- Others
-#ifdef LED_PINS
-#define PIN_LED 32
-#define PIN_LED_LEFT 33
-#define PIN_LED_RIGHT 26
-#endif // LED_PINS
-
-// ADC definitions (for reading battery voltage)
-#ifdef BATTERY_VOLTAGE
-#define ADC_CHANNEL_BATTERY_VOLTAGE ADC1_CHANNEL_6 // GPIO number 34
-// Battery voltage is measured via a 100 and 3.3 kOhm resistor divider. Reference voltage is 1.1 V (if attenuation is set to 0dB)
-#define BATTERY_VOLTAGE_SCALING_FACTOR (100 + 3.3) / 3.3
-#define BATTERY_VOLTAGE_FILTER_COEFFICIENT 0.99
-esp_adc_cal_characteristics_t adc_chars;
-#endif // BATTERY_VOLTAGE
-
-// BT MAC
-char BTaddress[20] = "00:00:00:00:00:00";
 
 // ----- Interrupt functions -----
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -208,14 +173,10 @@ void setup()
     motRight.microStep = microStep;
 
     // Gyro setup
-    //  delay(200);
-    Wire.begin(21, 22, 400000UL);
-    //  delay(100);
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000UL);
     DB_PRINTLN(imu.testConnection());
     imu.initialize();
     imu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
-    // Calculate and store gyro offsets
-    //  delay(50);
 
     // Read gyro offsets
     DB_PRINT("Gyro calibration values: ");
@@ -252,29 +213,6 @@ void setup()
     Xbox_setup();
 #endif
 
-    DB_PRINTLN("Ready");
-
-    // Characterize ADC at particular atten
-#ifdef BATTERY_VOLTAGE
-    esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_0db, ADC_WIDTH_BIT_12, 1100, &adc_chars);
-    if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF)
-    {
-        DB_PRINTLN("eFuse Vref");
-    }
-    else if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP)
-    {
-        DB_PRINTLN("Two Point");
-    }
-    else
-    {
-        DB_PRINTLN("Default");
-    }
-    Serial << "ADC calibration values (attenuation, vref, coeff a, coeff b):" << adc_chars.atten << "\t" << adc_chars.vref << "\t" << adc_chars.coeff_a << "\t" << adc_chars.coeff_b << endl;
-
-    // Configure ADC
-    adc1_config_channel_atten(ADC_CHANNEL_BATTERY_VOLTAGE, ADC_ATTEN_0db);
-    adc_set_data_inv(ADC_UNIT_1, true); // For some reason, data is inverted...
-#endif                                  // BATTERY_VOLTAGE
     DB_PRINTLN("Booted, ready for driving!");
 #ifdef LED_PINS
     digitalWrite(PIN_LED_RIGHT, 1);
@@ -341,6 +279,7 @@ void loop()
                 lastInputTime = tNowMs;
                 if (controlMode == ANGLE_PLUS_POSITION)
                 {
+                    DB_PRINTLN("control mode: ANGLE_PLUS_SPEED");
                     controlMode = ANGLE_PLUS_SPEED;
                     motLeft.setStep(0);
                     motRight.setStep(0);
@@ -358,6 +297,7 @@ void loop()
             // Switch to position control if no input is received for a certain amount of time
             if (tNowMs - lastInputTime > 2000 && controlMode == ANGLE_PLUS_SPEED)
             {
+                DB_PRINTLN("control mode: ANGLE_PLUS_POSITION");
                 controlMode = ANGLE_PLUS_POSITION;
                 motLeft.setStep(0);
                 motRight.setStep(0);
@@ -488,6 +428,7 @@ void loop()
                 digitalWrite(PIN_LED_LEFT, 1);
                 digitalWrite(PIN_LED_RIGHT, 1);
 #endif // LED_PINS
+                DB_PRINTLN("control mode: ANGLE_PLUS_POSITION");
                 controlMode = ANGLE_PLUS_POSITION;
 
                 if (!overrideMode)
