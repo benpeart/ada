@@ -1,0 +1,13 @@
+﻿Part,Manufacturer,Part Number,Quantity,Price ($),Footprint (mm²),Description
+Cboot,MuRata,GRM155R71A104KA01D,1,0.01,3,Cap: 100 nF  Total Derated Cap: 100 nF  VDC: 10 V  ESR: 1 mΩ  Package: 0402  
+Ccomp,TDK,C2012C0G1H272J060AA,1,0.03,6.75,Cap: 2.7 nF  Total Derated Cap: 2.7 nF  VDC: 50 V  ESR: 0 Ω  Package: 0805  
+Ccomp2,Yageo,CC0805JRNPO9BN100,1,0.01,6.75,Cap: 10 pF  Total Derated Cap: 10 pF  VDC: 50 V  ESR: 0 Ω  Package: 0805  
+Cin,TDK,C3225X7R1H106M250AC,2,0.27,14.7,Cap: 10 µF  Total Derated Cap: 10 µF  VDC: 50 V  ESR: 1 mΩ  Package: 1210  
+Cout,MuRata,GRM32ER61C476KE15L,2,0.17,14.7,Cap: 47 µF  Total Derated Cap: 63 µF  VDC: 16 V  ESR: 3.04 mΩ  Package: 1210  
+Css,MuRata,GRM033R71A822KA01D,1,0.01,2.08,Cap: 8.2 nF  Total Derated Cap: 8.2 nF  VDC: 10 V  ESR: 1 mΩ  Package: 0201  
+D1,Fairchild Semiconductor,FSV360FP,1,0.13,13.16,Type: Schottky  VRRM: 60 V  Io: 3 A  
+L1,Coilcraft,MSS1038-123MLB,1,0.62,151.28,L: 12 µH  DCR: 36.9 mΩ  IDC: 4 A  
+Rcomp,Vishay-Dale,CRCW040213K7FKED,1,0.01,3,Resistance: 13.7 kΩ  Tolerance: 1.0%  Power: 63 mW  
+Rfbb,Vishay-Dale,CRCW04021K96FKED,1,0.01,3,Resistance: 1.96 kΩ  Tolerance: 1.0%  Power: 63 mW  
+Rfbt,Vishay-Dale,CRCW040210K2FKED,1,0.01,3,Resistance: 10.2 kΩ  Tolerance: 1.0%  Power: 63 mW  
+U1,Texas Instruments,TPS54331DDAR,1,0.53,55.2,

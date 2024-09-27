@@ -1,4 +1,5 @@
-#define WEBUI // WiFi and Web UI
+#define TMC2209 // TMC2209 stepper controller library
+#define WEBUI   // WiFi and Web UI
 // #define MDNS // include MDNS support
 // #define SPIFFSEDITOR // include the SPPIFFS editor
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
@@ -18,7 +19,7 @@ extern plotType plot;
 
 // ESP32 Pin Assignments
 
-// -- Stepper motor pin assignments
+// Stepper motor pin assignments
 #define motEnablePin 19
 
 #define motLeftUStepPin1 18
@@ -31,21 +32,23 @@ extern plotType plot;
 #define motRightStepPin 26
 #define motRightDirPin 25
 
+// TMC2209 Stepper driver
+#ifdef TMC2209
+#define SERIAL2_PORT Serial2 // TMC2208/TMC2224 HardwareSerial port
+#define SERIAL2_RX_PIN 16    // Specify Serial2 RX pin as the default has changed
+#define SERIAL2_TX_PIN 17    // Specify Serial2 TX pin as the default has changed
+#endif // TMC2209
+
 // -- Others
 #define PIN_BATTERY_VOLTAGE 36 // ADC pin connected to voltage divider
 
-#define PIN_I2C_SDA 21
-#define PIN_I2C_SCL 22
+#define PIN_I2C_SDA 21       // MPU SDA pin
+#define PIN_I2C_SCL 22       // MPU SCL pin
+#define PIN_MPU_INTERRUPT 23 // MPU interrupt pin
 
 #ifdef LED_PINS
-#define PIN_LED 32
-#define PIN_LED_LEFT 33
-#define PIN_LED_RIGHT 26
-#endif // LED_PINS
-
-
-
-void parseCommand(char *data, uint8_t length);
+#define PIN_LED 02 // LED I2S output
+#endif             // LED_PINS
 
 extern Preferences preferences;
 
@@ -53,6 +56,9 @@ extern fastStepper motLeft;
 extern fastStepper motRight;
 
 // these are all needed so we can plot them in the WebUI
+#ifdef WEBUI
+void parseCommand(char *data, uint8_t length);
+
 extern float maxStepSpeed;
 
 extern PID pidAngle;
@@ -67,6 +73,7 @@ extern float pidPosOutput;
 extern float pidSpeedOutput;
 extern float speedFilterConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 extern float steerFilterConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+#endif                            // WEBUI
 
 /*  Remote control structure
     Every remote should give a speed and steer command from -100 ... 100

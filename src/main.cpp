@@ -1,6 +1,8 @@
 /*
 A high speed balancing robot, running on an ESP32.
 
+Forked and highly modified by Ben Peart. See http://github.com/benpeart/ada
+
 Wouter Klop
 wouter@elexperiment.nl
 For updates, see elexperiment.nl
@@ -21,6 +23,9 @@ Also, you have to publish all modifications.
 #include "webui.h"
 #endif // WEBUI
 #include <MPU6050.h>
+#ifdef TMC2209
+#include <TMCStepper.h>
+#endif // TMC2209
 #ifdef INPUT_PS3
 #include "ps3.h"
 #endif // INPUT_PS3
@@ -34,8 +39,30 @@ float steerFactor = 1.0;         // how strong it reacts to inputs, lower = soft
 float speedFilterConstant = 0.9; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 float steerFilterConstant = 0.9; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 
+// TMC2209 Stepper driver
+#ifdef TMC2209
+#define DRIVER_ADDRESS_LEFT 0b00  // TMC2209 Driver address according to MS1=LOW and MS2=LOW
+#define DRIVER_ADDRESS_RIGHT 0b01 // TMC2209 Driver address according to MS1=HIGH and MS2=LOW
+
+#define SERIAL2_PORT Serial2 // TMC2208/TMC2224 HardwareSerial port
+#define SERIAL_BAUD_RATE 500000
+#define SERIAL2_RX_PIN 16 // Specify Serial2 RX pin as the default has changed
+#define SERIAL2_TX_PIN 17 // Specify Serial2 TX pin as the default has changed
+
+#define MAX_CURRENT 2000 // in mA; should match capabilities of stepper motor
+#define R_SENSE 0.11f    // Match to your driver
+                         // SilentStepStick series use 0.11
+                         // UltiMachine Einsy and Archim2 boards use 0.2
+                         // Panucatt BSD2660 uses 0.1
+                         // Watterott TMC5160 uses 0.075
+
+TMC2209Stepper tmcDriverLeft(&SERIAL2_PORT, R_SENSE, DRIVER_ADDRESS_LEFT);   // Hardware Serial
+TMC2209Stepper tmcDriverRight(&SERIAL2_PORT, R_SENSE, DRIVER_ADDRESS_RIGHT); // Hardware Serial
+#else
 // #define STEPPER_DRIVER_A4988 // Use A4988 stepper driver, which uses different microstepping settings
 #define STEPPER_DRIVER_TMC2209 // Use TMC2209 stepper driver, which uses different microstepping settings
+
+#endif // TMC2209
 
 // Remote control structure
 remoteControlType remoteControl;
@@ -61,7 +88,7 @@ Preferences preferences;
 fastStepper motLeft(motLeftStepPin, motLeftDirPin, 0, motLeftTimerFunction);
 fastStepper motRight(motRightStepPin, motRightDirPin, 1, motRightTimerFunction);
 
-uint8_t microStep = 16;
+uint8_t microStep = 0;
 float maxStepSpeed = 1500;
 
 // -- PID control
@@ -151,14 +178,6 @@ void setup()
         DB_PRINTF("EEPROM init complete, all preferences deleted, new pref_version: %d\n", PREF_VERSION);
     }
 
-    pinMode(motEnablePin, OUTPUT);
-    pinMode(motLeftUStepPin1, OUTPUT);
-    pinMode(motLeftUStepPin2, OUTPUT);
-    pinMode(motRightUStepPin1, OUTPUT);
-    pinMode(motRightUStepPin2, OUTPUT);
-    motEnable(false); // Disable steppers during startup
-    setMicroStep(microStep);
-
 #ifdef LED_PINS
     pinMode(PIN_LED, OUTPUT);
     pinMode(PIN_LED_LEFT, OUTPUT);
@@ -167,12 +186,84 @@ void setup()
     digitalWrite(PIN_LED_LEFT, 1); // Turn on one LED to indicate we are live
     digitalWrite(PIN_LED_RIGHT, 0);
 #endif // LED_PINS
+
+#ifdef TMC2209
+    // use TMC2209 pins MS1 and MS2 to set the correct address for Serial control
+    pinMode(motLeftUStepPin1, OUTPUT);
+    pinMode(motLeftUStepPin2, OUTPUT);
+    digitalWrite(motLeftUStepPin1, LOW);
+    digitalWrite(motLeftUStepPin2, LOW);
+    pinMode(motRightUStepPin1, OUTPUT);
+    pinMode(motRightUStepPin2, OUTPUT);
+    digitalWrite(motRightUStepPin1, HIGH);
+    digitalWrite(motRightUStepPin2, LOW);
+
+    // setup a TMC2209 stepper driver
+    SERIAL2_PORT.begin(SERIAL_BAUD_RATE, SERIAL_8N1, SERIAL2_RX_PIN, SERIAL2_TX_PIN); // Initialize HW UART drivers with the correct RX/TX pins
+    tmcDriverLeft.begin();                                                            // Initiate pins and registeries
+    tmcDriverRight.begin();                                                           // Initiate pins and registeries
+    tmcDriverLeft.toff(5);                                                            // Enables driver in software (0 = driver off, 1-15 = driver enabled)
+    tmcDriverRight.toff(5);                                                           // Enables driver in software (0 = driver off, 1-15 = driver enabled)
+
+    // test the serial connections to the TMC2209
+    uint8_t resultLeft = tmcDriverLeft.test_connection();
+    if (resultLeft != 0)
+    {
+        DB_PRINTF("tmcDriverLeft.test_connection failed with error code: %d\n", resultLeft);
+    }
+    uint8_t resultRight = tmcDriverRight.test_connection();
+    if (resultRight != 0)
+    {
+        DB_PRINTF("tmcDriverRight.test_connection failed with error code: %d\n", resultRight);
+    }
+    if (resultLeft == 0 && resultRight == 0)
+    {
+        tmcDriverLeft.rms_current(MAX_CURRENT);  // Set stepper current to MAX_CURRENT in mA
+        tmcDriverRight.rms_current(MAX_CURRENT); // Set stepper current to MAX_CURRENT in mA
+
+        // configure microstepping
+        tmcDriverLeft.mstep_reg_select(true);  // Microstep resolution selected by MRES register
+        tmcDriverRight.mstep_reg_select(true); // Microstep resolution selected by MRES register
+
+        // enable CoolStep to save up to 75% of energy
+        tmcDriverLeft.TCOOLTHRS(0xFFFF);  // Set threshold for CoolStep
+        tmcDriverRight.TCOOLTHRS(0xFFFF); // Set threshold for CoolStep
+                                          //    tmcDriverLeft.THIGH(0);                  // Set high threshold (not avaialble with TMC2209)
+                                          //    tmcDriverRight.THIGH(0);                 // Set high threshold (not avaialble with TMC2209)
+        tmcDriverLeft.SGTHRS(10);         // Set StallGuard threshold
+        tmcDriverRight.SGTHRS(10);        // Set StallGuard threshold
+        tmcDriverLeft.semin(5);           // Minimum current adjustment min = 1, max = 15
+        tmcDriverRight.semin(5);          // Minimum current adjustment min = 1, max = 15
+        tmcDriverLeft.semax(2);           // Maximum current adjustment min = 0, max = 15, 0-2 recommended
+        tmcDriverRight.semax(2);          // Maximum current adjustment min = 0, max = 15, 0-2 recommended
+        tmcDriverLeft.sedn(0b01);         // Current down step speed
+        tmcDriverRight.sedn(0b01);        // Current down step speed
+
+        // StealthChop2 guarantees that the motor is absolutely quiet in standstill and in slow motion
+        // SpreadCycle provides high dynamics (reacting at once to a change of motor velocity) and highest peak velocity at low vibration
+        tmcDriverLeft.en_spreadCycle(false);  // Toggle spreadCycle on TMC2208/2209/2224. false = StealthChop (low speed) / true = SpreadCycle (faster speeds)
+        tmcDriverRight.en_spreadCycle(false); // Toggle spreadCycle on TMC2208/2209/2224. false = StealthChop (low speed) / true = SpreadCycle (faster speeds)
+        tmcDriverLeft.pwm_autoscale(true);    // Needed for stealthChop
+        tmcDriverRight.pwm_autoscale(true);   // Needed for stealthChop
+    }
+
+#else
+    // setup micro steping pins
+    pinMode(motLeftUStepPin1, OUTPUT);
+    pinMode(motLeftUStepPin2, OUTPUT);
+    pinMode(motRightUStepPin1, OUTPUT);
+    pinMode(motRightUStepPin2, OUTPUT);
+
+#endif // TMC2209
+
+    // setup stepper motors
+    pinMode(motEnablePin, OUTPUT);
+    motEnable(false); // Disable steppers during startup
+    setMicroStep(16);
     motLeft.init();
     motRight.init();
-    motLeft.microStep = microStep;
-    motRight.microStep = microStep;
 
-    // Gyro setup
+    // Gyro setup (utilize maximum I2C bus speed supported by the MPU6050 - 400kHz)
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000UL);
     DB_PRINTLN(imu.testConnection());
     imu.initialize();
@@ -217,11 +308,6 @@ void setup()
 #ifdef LED_PINS
     digitalWrite(PIN_LED_RIGHT, 1);
 #endif // LED_PINS
-}
-
-float mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
-{
-    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 void loop()
@@ -361,20 +447,17 @@ void loop()
                 }
             }
 
-            // Switch microstepping
+            // Dynamically switch microstepping to achieve insane speeds
+#ifdef DYNAMIC_MICROSTEPPING
             absSpeed = abs(avgMotSpeed);
-            uint8_t lastMicroStep = microStep;
 
             if (absSpeed > (150 * 32 / microStep) && microStep > 1)
                 microStep /= 2;
             if (absSpeed < (130 * 32 / microStep) && microStep < 32)
                 microStep *= 2;
 
-            // if (microStep!=lastMicroStep) {
-            //   motLeft.microStep = microStep;
-            //   motRight.microStep = microStep;
-            //   setMicroStep(microStep);
-            // }
+            setMicroStep(microStep);
+#endif // DYNAMIC_MICROSTEPPING
 
             // Disable control if robot is almost horizontal. Re-enable if upright.
             if ((abs(filterAngle) > angleDisableThreshold && !selfRight) || disableControl)
@@ -583,8 +666,7 @@ void parseCommand(char *data, uint8_t length)
             controlMode = (controlType)val2;
             break;
         case 'u':
-            microStep = atoi(data + 1);
-            setMicroStep(microStep);
+            setMicroStep(atoi(data + 1));
             break;
         case 'g':
             gyroGain = atof(data + 1);
@@ -739,6 +821,16 @@ void initSensor(uint8_t n)
 
 void setMicroStep(uint8_t uStep)
 {
+    if (microStep == uStep)
+        return;
+
+    microStep = uStep;
+    motLeft.microStep = uStep;
+    motRight.microStep = uStep;
+#ifdef TMC2209                        // Use TMC2209 stepper driver, which uses different microstepping settings
+    tmcDriverLeft.microsteps(uStep);  // Set microsteps per step
+    tmcDriverRight.microsteps(uStep); // Set microsteps per step
+#else
 #ifdef STEPPER_DRIVER_TMC2209
     uint8_t ms1, ms2;
     switch (uStep)
@@ -788,5 +880,6 @@ void setMicroStep(uint8_t uStep)
         digitalWrite(motRightUStepPin2, 1);
     }
 #endif
-#endif
+#endif // STEPPER_DRIVER_TMC2209
+#endif // TMC2209
 }
