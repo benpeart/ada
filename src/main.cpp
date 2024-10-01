@@ -33,11 +33,9 @@ Also, you have to publish all modifications.
 #include "xbox.h"
 #endif // INPUT_XBOX
 
-// Driving behaviour
-float speedFactor = 0.7;         // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
-float steerFactor = 1.0;         // how strong it reacts to inputs, lower = softer (limits max speed) (between 0 and 1)
-float speedFilterConstant = 0.9; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
-float steerFilterConstant = 0.9; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+// Use 'Expodential Smoothing' to improve driving behaviour by preventing abrupt changes in speed or direction
+float speedAlphaConstant = 0.1; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+float steerAlphaConstant = 0.1; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 
 // TMC2209 Stepper driver
 #ifdef TMC2209
@@ -174,7 +172,7 @@ void setup()
 
     // Disable steppers during startup
     pinMode(motEnablePin, OUTPUT);
-    motEnable(false); 
+    motEnable(false);
 
 #ifdef TMC2209
     // use TMC2209 pins MS1 and MS2 to set the correct address for Serial control
@@ -281,19 +279,18 @@ void loop()
 {
     static unsigned long tLast = 0;
     float avgMotSpeed;
-    float steer = 0;
-    static float avgSteer;
-    static float avgSpeed;
-    static boolean enableControl = 0;
+    static float smoothedSteer = 0;
+    static float smoothedSpeed = 0;
+    static boolean enableControl = false;
     static float avgMotSpeedSum = 0;
     int32_t avgMotStep;
     static float avgBatteryVoltage = 0;
     static uint32_t lastInputTime = 0;
     uint32_t tNowMs;
     float absSpeed = 0;
-    static boolean overrideMode = 0, lastOverrideMode = 0;
-    static boolean selfRight = 0;
-    static boolean disableControl = 0;
+    static boolean overrideMode = false, lastOverrideMode = false;
+    static boolean selfRight = false;
+    static boolean disableControl = false;
     static float angleErrorIntegral = 0;
 
     unsigned long tNow = micros();
@@ -306,24 +303,26 @@ void loop()
 
         if (remoteControl.selfRight && !enableControl)
         { // Start self-right action (stops when robot is upright)
-            selfRight = 1;
-            disableControl = 0;
-            remoteControl.selfRight = 0; // Reset single action bool
+            selfRight = true;
+            disableControl = false;
+            remoteControl.selfRight = false; // Reset single action bool
         }
         else if (remoteControl.disableControl && enableControl)
         { // Sort of kill-switch
-            disableControl = 1;
-            selfRight = 0;
-            remoteControl.disableControl = 0;
+            disableControl = true;
+            selfRight = false;
+            remoteControl.disableControl = false;
         }
 
-        // Filter speed and steer input
-        avgSpeed = speedFilterConstant * avgSpeed + (1 - speedFilterConstant) * remoteControl.speed / 5.0;
-        avgSteer = steerFilterConstant * avgSteer + (1 - steerFilterConstant) * remoteControl.steer;
+        // Use 'Expodential Smoothing' to improve driving behaviour by preventing abrupt changes in speed or direction
+        // Scale speed down to 20% of the remoteControl.speed value as it is way to fast to control otherwise
+        // TODO: may want to dampen steering input as smoothedSpeed increases
+        smoothedSpeed = speedAlphaConstant * remoteControl.speed / 5.0 + (1 - speedAlphaConstant) * smoothedSpeed;
+        smoothedSteer = steerAlphaConstant * remoteControl.steer + (1 - steerAlphaConstant) * smoothedSteer;
 
         if (enableControl)
         {
-            if (abs(avgSpeed) < 0.2)
+            if (abs(smoothedSpeed) < 0.2)
             {
                 // remoteControl.speed = 0;
             }
@@ -340,13 +339,6 @@ void loop()
                 }
             }
 
-            steer = avgSteer;
-            // if (abs(avgSteer)>1) {
-            //   steer = avgSteer * (1 - abs(avgSpeed)/150.0);
-            // } else {
-            //   steer = 0;
-            // }
-
             // Switch to position control if no input is received for a certain amount of time
             if (tNowMs - lastInputTime > 2000 && controlMode == ANGLE_PLUS_SPEED)
             {
@@ -360,40 +352,35 @@ void loop()
             // Actual controller computations
             if (controlMode == ANGLE_ONLY)
             {
-                pidAngle.setpoint = avgSpeed * 2;
+                pidAngle.setpoint = smoothedSpeed * 2;
             }
             else if (controlMode == ANGLE_PLUS_POSITION)
             {
                 avgMotStep = (motLeft.getStep() + motRight.getStep()) / 2;
-                pidPos.setpoint = avgSpeed;
+                pidPos.setpoint = smoothedSpeed;
                 pidPos.input = -((float)avgMotStep) / 1000.0;
                 pidPosOutput = pidPos.calculate();
                 pidAngle.setpoint = pidPosOutput;
             }
             else if (controlMode == ANGLE_PLUS_SPEED)
             {
-                pidSpeed.setpoint = avgSpeed;
+                pidSpeed.setpoint = smoothedSpeed;
                 pidSpeed.input = -avgMotSpeedSum / 100.0;
                 pidSpeedOutput = pidSpeed.calculate();
                 pidAngle.setpoint = pidSpeedOutput;
             }
 
+            // calculate the correction needed to hit our target setpoint
             pidAngle.input = filterAngle;
-
             pidAngleOutput = pidAngle.calculate();
 
             avgMotSpeedSum += pidAngleOutput / 2;
-            if (avgMotSpeedSum > maxStepSpeed)
-            {
-                avgMotSpeedSum = maxStepSpeed;
-            }
-            else if (avgMotSpeedSum < -maxStepSpeed)
-            {
-                avgMotSpeedSum = -maxStepSpeed;
-            }
+            avgMotSpeedSum = constrain(avgMotSpeedSum, -maxStepSpeed, maxStepSpeed);
             avgMotSpeed = avgMotSpeedSum;
-            motLeft.speed = avgMotSpeed + steer;
-            motRight.speed = avgMotSpeed - steer;
+
+            // add in steering input
+            motLeft.speed = avgMotSpeed + smoothedSteer;
+            motRight.speed = avgMotSpeed - smoothedSteer;
 
             // Detect if robot has fallen. Concept: integrate angle controller error over time.
             // If absolute integrated error surpasses threshold, disable controller
@@ -402,19 +389,19 @@ void loop()
             {
                 if (abs(angleErrorIntegral) > angleErrorIntegralThresholdDuringSelfright)
                 {
-                    selfRight = 0;
-                    disableControl = 1;
+                    selfRight = false;
+                    disableControl = true;
                 }
             }
             else
             {
                 if (abs(angleErrorIntegral) > angleErrorIntegralThreshold)
                 {
-                    disableControl = 1;
+                    disableControl = true;
                 }
             }
 
-            // Dynamically switch microstepping to achieve insane speeds
+            // Dynamically switch microstepping to achieve even more insane speeds
 #ifdef DYNAMIC_MICROSTEPPING
             absSpeed = abs(avgMotSpeed);
 
@@ -430,7 +417,7 @@ void loop()
             if ((abs(filterAngle) > angleDisableThreshold && !selfRight) || disableControl)
             {
                 DB_PRINTLN("control disabled");
-                enableControl = 0;
+                enableControl = false;
                 // disableControl = 0; // Reset disableControl flag
                 motLeft.speed = 0;
                 motRight.speed = 0;
@@ -442,7 +429,7 @@ void loop()
             }
             if (abs(filterAngle) < angleEnableThreshold && selfRight)
             {
-                selfRight = 0;
+                selfRight = false;
                 angleErrorIntegral = 0; // Reset, otherwise the fall detection will be triggered immediately
             }
         }
@@ -456,24 +443,23 @@ void loop()
                 motLeft.speed = 0;
                 motRight.speed = 0;
                 motEnable(true); // Enable motors
-                overrideMode = 1;
             }
             else if (!overrideMode && lastOverrideMode)
             {
                 motEnable(false); // disable motors
-                overrideMode = 0;
+                overrideMode = false;
             }
             lastOverrideMode = overrideMode;
 
             if (abs(filterAngle) > angleEnableThreshold + 5)
             { // Only reset disableControl flag if angle is out of "enable" zone, otherwise robot will keep cycling between enable and disable states
-                disableControl = 0;
+                disableControl = false;
             }
 
             if ((abs(filterAngle) < angleEnableThreshold || selfRight) && !disableControl)
             { // (re-)enable and reset stuff
                 DB_PRINTLN("control enabled");
-                enableControl = 1;
+                enableControl = true;
 #ifdef LED_PINS
                 digitalWrite(PIN_LED_LEFT, 1);
                 digitalWrite(PIN_LED_RIGHT, 1);
@@ -490,7 +476,7 @@ void loop()
                 else
                 {
                     avgMotSpeedSum = (motLeft.speed + motRight.speed) / 2;
-                    overrideMode = 0;
+                    overrideMode = false;
                 }
 
                 motLeft.setStep(0);
@@ -503,19 +489,12 @@ void loop()
 
             if (overrideMode)
             {
-                float spd = avgSpeed;
-                float str = avgSteer;
-                // if (spd<3) spd = 0;
-                // if (str<3) str = 0;
-                motLeft.speed = -30 * spd + 2 * str;
-                motRight.speed = -30 * spd - 2 * str;
+                motLeft.speed = -30 * smoothedSpeed + 2 * smoothedSteer;
+                motRight.speed = -30 * smoothedSpeed - 2 * smoothedSteer;
 
                 // Run angle PID controller in background, such that it matches when controller takes over, if needed
                 pidAngle.input = filterAngle;
                 pidAngleOutput = pidAngle.calculate();
-                // pidSpeed.setpoint = avgSpeed;
-                // pidSpeed.input = -(motLeft.speed+motRight.speed)/2/100.0;
-                // pidSpeedOutput = pidSpeed.calculate();
             }
             // Serial << motLeft.speed << "\t" << motRight.speed << "\t" << overrideMode << endl;
         }

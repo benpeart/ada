@@ -303,9 +303,9 @@ void sendConfigurationData(uint8_t num)
     wsServer.sendTXT(num, wBuf);
     sprintf(wBuf, "c%do%.4f", 3, -pidSpeed.minOutput);
     wsServer.sendTXT(num, wBuf);
-    sprintf(wBuf, "h%.4f", speedFilterConstant);
+    sprintf(wBuf, "h%.4f", speedAlphaConstant);
     wsServer.sendTXT(num, wBuf);
-    sprintf(wBuf, "i%.4f", steerFilterConstant);
+    sprintf(wBuf, "i%.4f", steerAlphaConstant);
     wsServer.sendTXT(num, wBuf);
     sprintf(wBuf, "j%.4f", gyroGain);
     wsServer.sendTXT(num, wBuf);
@@ -362,10 +362,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
                     remoteControl.steer = c.val;
                     break;
                 case 2:
-                    remoteControl.selfRight = 1;
+                    remoteControl.selfRight = true;
                     break;
                 case 3:
-                    remoteControl.disableControl = 1;
+                    remoteControl.disableControl = true;
                     break;
                 }
                 // if (c.cmd==0) {

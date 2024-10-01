@@ -34,11 +34,11 @@ void onXboxNotify()
         remoteControl.steerGain = 1.0;
     }
     if (xboxController.xboxNotif.btnB)
-        remoteControl.selfRight = 1;
+        remoteControl.selfRight = true;
     if (xboxController.xboxNotif.btnA)
-        remoteControl.disableControl = 1;
+        remoteControl.disableControl = true;
     if (xboxController.xboxNotif.btnX)
-        remoteControl.override = 1;
+        remoteControl.override = true;
     if (xboxController.xboxNotif.btnRB)
     {
         if (remoteControl.speedOffset < 20.0)
@@ -84,7 +84,7 @@ void Xbox_setup()
 
 void Xbox_loop()
 {
-    static int firstNotification = 1;
+    static boolean firstNotification = true;
     xboxController.onLoop();
     if (xboxController.isConnected())
     {
@@ -96,7 +96,7 @@ void Xbox_loop()
         {
             if (firstNotification)
             {
-                firstNotification = 0;
+                firstNotification = false;
                 onXboxConnect();
             }
 
@@ -122,7 +122,7 @@ void Xbox_loop()
     {
         if (!firstNotification)
             onXboxDisconnect();
-        firstNotification = 1;
+        firstNotification = true;
     }
 }
 #endif // INPUT_XBOX

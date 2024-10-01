@@ -27,11 +27,11 @@ void onPs3Notify()
         remoteControl.steerGain = 1.0;
     }
     if (Ps3.event.button_down.circle)
-        remoteControl.selfRight = 1;
+        remoteControl.selfRight = true;
     if (Ps3.event.button_down.cross)
-        remoteControl.disableControl = 1;
+        remoteControl.disableControl = true;
     if (Ps3.event.button_down.square)
-        remoteControl.override = 1;
+        remoteControl.override = true;
     if (Ps3.event.button_down.r1)
     {
         if (remoteControl.speedOffset < 20.0)

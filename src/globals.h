@@ -71,16 +71,14 @@ extern float gyroGain;
 extern float pidAngleOutput;
 extern float pidPosOutput;
 extern float pidSpeedOutput;
-extern float speedFilterConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
-extern float steerFilterConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+extern float speedAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+extern float steerAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 #endif                            // WEBUI
 
 /*  Remote control structure
     Every remote should give a speed and steer command from -100 ... 100
-    To adjust "driving experience", e.g. a slow beginners mode, or a fast expert mode,
-    a gain can be adjusted for the speed and steer inputs.
-    Additionaly, a selfRight input can be used. When setting this bit to 1,
-    the robot will enable control in an attempt to self right.
+    To adjust "driving experience", e.g. a slow beginners mode, or a fast expert mode, a gain can be adjusted for the speed and steer inputs.
+    Additionaly, a selfRight input can be used. When setting this bit to true, the robot will enable control in an attempt to self right.
     The override input can be used to control the robot when it is lying flat.
     The robot will switch automatically from override to balancing mode, if it happens to right itself.
     The disable control input can be used to
@@ -96,8 +94,8 @@ typedef struct
     float speedGain = 0.7;
     float steerGain = 0.6;
     float speedOffset = 0.0;
-    bool selfRight = 0;
-    bool disableControl = 0;
-    bool override = 0;
+    bool selfRight = false;
+    bool disableControl = false;
+    bool override = false;
 } remoteControlType;
 extern remoteControlType remoteControl;
