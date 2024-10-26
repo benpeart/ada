@@ -288,7 +288,6 @@ void loop()
     static uint32_t lastInputTime = 0;
     uint32_t tNowMs;
     float absSpeed = 0;
-    static boolean overrideMode = false, lastOverrideMode = false;
     static boolean selfRight = false;
     static boolean disableControl = false;
     static float angleErrorIntegral = 0;
@@ -311,7 +310,7 @@ void loop()
         { // Sort of kill-switch
             disableControl = true;
             selfRight = false;
-            remoteControl.disableControl = false;
+            remoteControl.disableControl = false; // Reset single action bool
         }
 
         // Use 'Expodential Smoothing' to improve driving behaviour by preventing abrupt changes in speed or direction
@@ -418,7 +417,6 @@ void loop()
             {
                 DB_PRINTLN("control disabled");
                 enableControl = false;
-                // disableControl = 0; // Reset disableControl flag
                 motLeft.speed = 0;
                 motRight.speed = 0;
                 motEnable(true);
@@ -436,21 +434,6 @@ void loop()
         else
         { // Control not active
 
-            // Override control
-            if (overrideMode && !lastOverrideMode)
-            { // Transition from disable to enable
-                // Enable override mode
-                motLeft.speed = 0;
-                motRight.speed = 0;
-                motEnable(true); // Enable motors
-            }
-            else if (!overrideMode && lastOverrideMode)
-            {
-                motEnable(false); // disable motors
-                overrideMode = false;
-            }
-            lastOverrideMode = overrideMode;
-
             if (abs(filterAngle) > angleEnableThreshold + 5)
             { // Only reset disableControl flag if angle is out of "enable" zone, otherwise robot will keep cycling between enable and disable states
                 disableControl = false;
@@ -467,36 +450,16 @@ void loop()
                 DB_PRINTLN("control mode: ANGLE_PLUS_POSITION");
                 controlMode = ANGLE_PLUS_POSITION;
 
-                if (!overrideMode)
-                {
-                    avgMotSpeedSum = 0;
-                    motEnable(true); // Enable motors
-                    pidAngle.reset();
-                }
-                else
-                {
-                    avgMotSpeedSum = (motLeft.speed + motRight.speed) / 2;
-                    overrideMode = false;
-                }
-
+                avgMotSpeedSum = 0;
+                motEnable(true); // Enable motors
                 motLeft.setStep(0);
                 motRight.setStep(0);
+                pidAngle.reset();
                 pidPos.reset();
                 pidSpeed.reset();
 
                 angleErrorIntegral = 0;
             }
-
-            if (overrideMode)
-            {
-                motLeft.speed = -30 * smoothedSpeed + 2 * smoothedSteer;
-                motRight.speed = -30 * smoothedSpeed - 2 * smoothedSteer;
-
-                // Run angle PID controller in background, such that it matches when controller takes over, if needed
-                pidAngle.input = filterAngle;
-                pidAngleOutput = pidAngle.calculate();
-            }
-            // Serial << motLeft.speed << "\t" << motRight.speed << "\t" << overrideMode << endl;
         }
 
         motLeft.update();
