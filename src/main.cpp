@@ -18,20 +18,21 @@ Also, you have to publish all modifications.
 
 #include <Arduino.h>
 #include "globals.h"
-#include "debug.h"
-#ifdef WEBUI
-#include "webui.h"
-#endif // WEBUI
 #include <gyro.h>
 #ifdef TMC2209
 #include <TMCStepper.h>
 #endif // TMC2209
+#include "wificonnection.h"
+#ifdef WEBSERVER
+#include "webserver.h"
+#endif // WEBSERVER
 #ifdef INPUT_PS3
 #include "ps3.h"
 #endif // INPUT_PS3
 #ifdef INPUT_XBOX
 #include "xbox.h"
 #endif // INPUT_XBOX
+#include "debug.h"
 
 // Use 'Expodential Smoothing' to improve driving behaviour by preventing abrupt changes in speed or direction
 float speedAlphaConstant = 0.1; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
@@ -66,9 +67,10 @@ TMC2209Stepper tmcDriverRight(&SERIAL2_PORT, R_SENSE, DRIVER_ADDRESS_RIGHT); // 
 remoteControlType remoteControl;
 
 // ----- Function prototypes
+#ifdef SERIALINPUT
 void parseSerial();
+#endif // SERIALINPUT
 void setMicroStep(uint8_t uStep);
-void sendConfigurationData(uint8_t num);
 
 void IRAM_ATTR motLeftTimerFunction();
 void IRAM_ATTR motRightTimerFunction();
@@ -215,8 +217,6 @@ void setup()
         // enable CoolStep to save up to 75% of energy
         tmcDriverLeft.TCOOLTHRS(0xFFFF);  // Set threshold for CoolStep
         tmcDriverRight.TCOOLTHRS(0xFFFF); // Set threshold for CoolStep
-                                          //    tmcDriverLeft.THIGH(0);                  // Set high threshold (not avaialble with TMC2209)
-                                          //    tmcDriverRight.THIGH(0);                 // Set high threshold (not avaialble with TMC2209)
         tmcDriverLeft.SGTHRS(10);         // Set StallGuard threshold
         tmcDriverRight.SGTHRS(10);        // Set StallGuard threshold
         tmcDriverLeft.semin(5);           // Minimum current adjustment min = 1, max = 15
@@ -248,16 +248,21 @@ void setup()
     motLeft.init();
     motRight.init();
 
-    // Gyro setup
-    Gyro_setup();
-
-#ifdef WEBUI
-    WebUI_setup();
-#endif // WEBUI
-
+    // initialize all our PIDs with default values
     pidAngle.setParameters(0.65, 1.0, 0.075, 15);
     pidPos.setParameters(1, 0, 1.2, 50);
     pidSpeed.setParameters(6, 5, 0, 20);
+
+    // Gyro setup
+    Gyro_setup();
+
+    // Connect to WiFi and setup for OTA updates
+    WiFi_setup();
+
+#ifdef WEBSERVER
+    // setup the AsyncWebServer and WebSocketsServer
+    WebServer_setup();
+#endif // WEBSERVER
 
 // Setup PS3 controller
 #ifdef INPUT_PS3
@@ -294,6 +299,8 @@ void loop()
 
     unsigned long tNow = micros();
     tNowMs = millis();
+
+    WiFi_loop();
 
     if (tNow - tLast > dT_MICROSECONDS)
     {
@@ -464,13 +471,15 @@ void loop()
 
         motLeft.update();
         motRight.update();
-
-#ifdef WEBUI
-        WebUI_loop();
-#endif // WEBUI
+#ifdef WEBSERVER
+        WebServer_loop();
+#endif // WEBSERVER        
     }
 
+    // only have this if we are in debug mode
+#ifdef SERIALINPUT    
     parseSerial();
+#endif // SERIALINPUT    
 
     // Handle PS3 controller
 #ifdef INPUT_PS3
@@ -483,6 +492,7 @@ void loop()
 #endif
 }
 
+#ifdef SERIALINPUT
 void parseSerial()
 {
     static char serialBuf[63];
@@ -580,7 +590,7 @@ void parseCommand(char *data, uint8_t length)
         case 'g':
             gyroGain = atof(data + 1);
             break;
-#ifdef WEBUI
+#ifdef WEBSERVER
         case 'p':
         {
             switch (data[1])
@@ -594,7 +604,7 @@ void parseCommand(char *data, uint8_t length)
             }
             break;
         }
-#endif // WEBUI
+#endif // WEBSERVER
         case 'j':
             gyroGain = atof(data + 1);
             break;
@@ -632,7 +642,7 @@ void parseCommand(char *data, uint8_t length)
                 ESP.restart();
                 // pidParList.sendList(&wsServer);
                 break;
-#ifdef WEBUI
+#ifdef WEBSERVER
             case 'l': // Send wifi networks to WS client
                 sendWifiList();
                 break;
@@ -654,7 +664,7 @@ void parseCommand(char *data, uint8_t length)
                 preferences.putUInt("wifi_mode", atoi(&data[2]));
                 DB_PRINTF("Updated WiFi mode to (0=access point, 1=connect to SSID): %d\n", atoi(&data[2]));
                 break;
-#endif                // WEBUI
+#endif                // WEBSERVER
             case 'n': // Robot name
                 len = length - 3;
                 memcpy(buf, &data[2], len);
@@ -668,6 +678,7 @@ void parseCommand(char *data, uint8_t length)
         }
     }
 }
+#endif // SERIALINPUT
 
 void setMicroStep(uint8_t uStep)
 {

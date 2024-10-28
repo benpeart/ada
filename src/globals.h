@@ -1,5 +1,14 @@
+#ifndef GLOBALS_H
+#define GLOBALS_H
+
 #define TMC2209 // TMC2209 stepper controller library
-#define WEBUI   // WiFi and Web UI
+
+// only include the web and winsock servers for debug buids as it only needed during development
+#ifdef DEBUG
+#define WEBSERVER
+#define SERIALINPUT
+#endif // DEBUG
+
 // #define MDNS // include MDNS support
 // #define SPIFFSEDITOR // include the SPPIFFS editor
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
@@ -8,14 +17,12 @@
 // #define BATTERY_VOLTAGE
 
 #include <Arduino.h>
-#include <Preferences.h> // for storing settings
+#include <Preferences.h>
 #include <fastStepper.h>
 #include "PID.h"
-#ifdef WEBUI
-#include "webui.h"
-
-extern plotType plot;
-#endif // WEBUI
+#ifdef WEBSERVER
+#include "webserver.h"
+#endif // WEBSERVER
 
 // ESP32 Pin Assignments
 
@@ -37,7 +44,7 @@ extern plotType plot;
 #define SERIAL2_PORT Serial2 // TMC2208/TMC2224 HardwareSerial port
 #define SERIAL2_RX_PIN 16    // Specify Serial2 RX pin as the default has changed
 #define SERIAL2_TX_PIN 17    // Specify Serial2 TX pin as the default has changed
-#endif // TMC2209
+#endif                       // TMC2209
 
 // -- Others
 #define PIN_BATTERY_VOLTAGE 36 // ADC pin connected to voltage divider
@@ -46,34 +53,31 @@ extern plotType plot;
 #define PIN_I2C_SCL 22       // MPU SCL pin
 #define PIN_MPU_INTERRUPT 23 // MPU interrupt pin
 
-#ifdef LED_PINS
-#define PIN_LED 02 // LED I2S output
-#endif             // LED_PINS
-
 extern Preferences preferences;
 
 extern fastStepper motLeft;
 extern fastStepper motRight;
 
-// these are all needed so we can plot them in the WebUI
-#ifdef WEBUI
 void parseCommand(char *data, uint8_t length);
+extern float filterAngle;
+extern float gyroFilterConstant;
+extern float gyroGain;
 
+// these are all needed so we can plot them in the WebUI
+#ifdef WEBSERVER
+extern plotType plot;
 extern float maxStepSpeed;
 
 extern PID pidAngle;
 extern PID pidPos;
 extern PID pidSpeed;
 extern float accAngle;
-extern float filterAngle;
-extern float gyroFilterConstant;
-extern float gyroGain;
 extern float pidAngleOutput;
 extern float pidPosOutput;
 extern float pidSpeedOutput;
 extern float speedAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 extern float steerAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
-#endif                            // WEBUI
+#endif                           // WEBSERVER
 
 /*  Remote control structure
     Every remote should give a speed and steer command from -100 ... 100
@@ -99,3 +103,4 @@ typedef struct
     bool override = false;
 } remoteControlType;
 extern remoteControlType remoteControl;
+#endif // GLOBALS_H

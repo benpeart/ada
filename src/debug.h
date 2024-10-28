@@ -5,7 +5,6 @@
 #undef DB_ACTIVE
 #ifdef DEBUG
 #define DB_ACTIVE 1
-extern bool SerialPlotterOutput;
 #else
 #define DB_ACTIVE 0
 #endif /* DEBUG */

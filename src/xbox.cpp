@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "globals.h"
 #ifdef INPUT_XBOX
 #include "xbox.h"
