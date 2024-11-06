@@ -92,10 +92,6 @@ float maxStepSpeed = 1500;
 #define dT_MICROSECONDS 5000
 float dT = dT_MICROSECONDS / 1000000.0;
 
-#define PID_ANGLE 0
-#define PID_POS 1
-#define PID_SPEED 2
-
 #define PID_ANGLE_MAX 12
 PID pidAngle(cPID, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
 #define PID_POS_MAX 35
@@ -103,6 +99,7 @@ PID pidPos(cPD, dT, PID_POS_MAX, -PID_POS_MAX);
 PID pidSpeed(cP, dT, PID_POS_MAX, -PID_POS_MAX);
 
 // make these global so we can use them in webui.cpp
+uint32_t tNowMs;
 float pidAngleOutput;
 float pidPosOutput;
 float pidSpeedOutput;
@@ -154,7 +151,7 @@ void setup()
 {
     Serial.begin(115200);
 
-    // Init EEPROM, if not done before
+    // Init preferences EEPROM, if not done before
     preferences.begin(PREF_NAMESPACE, false); // false = RW-mode
     if (preferences.getUInt(PREF_KEY_VERSION, 0) != PREF_VERSION)
     {
@@ -162,6 +159,11 @@ void setup()
         preferences.putUInt(PREF_KEY_VERSION, PREF_VERSION);
         DB_PRINTF("EEPROM init complete, all preferences deleted, new pref_version: %d\n", PREF_VERSION);
     }
+
+    // initialize all our PIDs with default values
+    pidAngle.setParameters(0.65, 1.0, 0.075, 15);
+    pidPos.setParameters(1, 0, 1.2, 50);
+    pidSpeed.setParameters(6, 5, 0, 20);
 
 #ifdef LED_PINS
     pinMode(PIN_LED, OUTPUT);
@@ -248,11 +250,6 @@ void setup()
     motLeft.init();
     motRight.init();
 
-    // initialize all our PIDs with default values
-    pidAngle.setParameters(0.65, 1.0, 0.075, 15);
-    pidPos.setParameters(1, 0, 1.2, 50);
-    pidSpeed.setParameters(6, 5, 0, 20);
-
     // Gyro setup
     Gyro_setup();
 
@@ -291,7 +288,6 @@ void loop()
     int32_t avgMotStep;
     static float avgBatteryVoltage = 0;
     static uint32_t lastInputTime = 0;
-    uint32_t tNowMs;
     float absSpeed = 0;
     static boolean selfRight = false;
     static boolean disableControl = false;
@@ -441,11 +437,13 @@ void loop()
         else
         { // Control not active
 
+            // clear the kill switch once we're not standing
             if (abs(filterAngle) > angleEnableThreshold + 5)
             { // Only reset disableControl flag if angle is out of "enable" zone, otherwise robot will keep cycling between enable and disable states
                 disableControl = false;
             }
 
+            // detect were vertical and reenable control
             if ((abs(filterAngle) < angleEnableThreshold || selfRight) && !disableControl)
             { // (re-)enable and reset stuff
                 DB_PRINTLN("control enabled");
@@ -473,13 +471,13 @@ void loop()
         motRight.update();
 #ifdef WEBSERVER
         WebServer_loop();
-#endif // WEBSERVER        
+#endif // WEBSERVER
     }
 
     // only have this if we are in debug mode
-#ifdef SERIALINPUT    
+#ifdef SERIALINPUT
     parseSerial();
-#endif // SERIALINPUT    
+#endif // SERIALINPUT
 
     // Handle PS3 controller
 #ifdef INPUT_PS3

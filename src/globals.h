@@ -7,6 +7,7 @@
 #ifdef DEBUG
 #define WEBSERVER
 #define SERIALINPUT
+#define BATTERY_VOLTAGE
 #endif // DEBUG
 
 // #define MDNS // include MDNS support
@@ -14,7 +15,6 @@
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
 #define INPUT_XBOX // Xbox controller via bluetooth. Dependencies take up quite some program space!
 // #define LED_PINS
-// #define BATTERY_VOLTAGE
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -58,12 +58,18 @@ extern Preferences preferences;
 extern fastStepper motLeft;
 extern fastStepper motRight;
 
+#ifdef SERIALINPUT
 void parseCommand(char *data, uint8_t length);
+#endif // SERIALINPUT
+
 extern float filterAngle;
 extern float gyroFilterConstant;
 extern float gyroGain;
 
 // these are all needed so we can plot them in the WebUI
+#ifdef BATTERY_VOLTAGE
+extern uint32_t tNowMs;
+#endif // BATTERY_VOLTAGE
 #ifdef WEBSERVER
 extern plotType plot;
 extern float maxStepSpeed;

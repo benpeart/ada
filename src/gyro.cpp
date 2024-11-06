@@ -36,17 +36,6 @@ void Gyro_ReadSensor()
     // Serial << ay/1000.0 << "\t" << az/1000.0 << "\t" << accAngle << "\t" << filterAngle << endl;
 }
 
-void initSensor(uint8_t n)
-{
-    float gyroFilterConstantBackup = gyroFilterConstant;
-    gyroFilterConstant = 0.8;
-    for (uint8_t i = 0; i < n; i++)
-    {
-        Gyro_ReadSensor();
-    }
-    gyroFilterConstant = gyroFilterConstantBackup;
-}
-
 void Gyro_setup()
 {
     // Gyro setup (utilize maximum I2C bus speed supported by the MPU6050 - 400kHz)
@@ -62,7 +51,7 @@ void Gyro_setup()
         char buf[16];
         sprintf(buf, "gyro_offset_%u", i);
         gyroOffset[i] = preferences.getShort(buf, 0);
-        DB_PRINTF("%u\t", gyroOffset[i]);
+        DB_PRINTF("%d\t", gyroOffset[i]);
     }
     DB_PRINTLN();
 
@@ -70,7 +59,13 @@ void Gyro_setup()
     angleOffset = preferences.getFloat("angle_offset", 0.0);
 
     // Perform initial gyro measurements
-    initSensor(50);    
+    float gyroFilterConstantBackup = gyroFilterConstant;
+    gyroFilterConstant = 0.8;
+    for (uint8_t i = 0; i < 50; i++)
+    {
+        Gyro_ReadSensor();
+    }
+    gyroFilterConstant = gyroFilterConstantBackup;
 }
 
 void Gyro_CalculateOffset(int nSample)
