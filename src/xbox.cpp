@@ -109,7 +109,7 @@ void Xbox_loop()
             remoteControl.speed = -(car_speed_forward - car_speed_reverse);
 
             // convert the range from 0 <-> maxJoy to -100 <-> 100 then scale
-            remoteControl.steer = -((float)(xboxController.xboxNotif.joyLHori - (XboxControllerNotificationParser::maxJoy / 2)) / (XboxControllerNotificationParser::maxJoy / 2) * 100 * remoteControl.steerGain);
+            remoteControl.steer = (float)(xboxController.xboxNotif.joyLHori - (XboxControllerNotificationParser::maxJoy / 2)) / (XboxControllerNotificationParser::maxJoy / 2) * 100 * remoteControl.steerGain;
 
             // if within the dead zone, zero it out
             if (remoteControl.steer > -STEERING_DEADZONE_RADIUS && remoteControl.steer < STEERING_DEADZONE_RADIUS)

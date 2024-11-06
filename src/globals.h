@@ -1,7 +1,7 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-#define TMC2209 // TMC2209 stepper controller library
+//#define TMC2209 // TMC2209 stepper controller library (currently broken with V2 hardware)
 
 // only include the web and winsock servers for debug buids as it only needed during development
 #ifdef DEBUG
@@ -27,17 +27,17 @@
 // ESP32 Pin Assignments
 
 // Stepper motor pin assignments
-#define motEnablePin 19
+#define motEnablePin 27
 
-#define motLeftUStepPin1 18
-#define motLeftUStepPin2 05
-#define motLeftStepPin 33
-#define motLeftDirPin 32
+#define motLeftUStepPin1 19
+#define motLeftUStepPin2 18
+#define motLeftStepPin 26
+#define motLeftDirPin 25
 
-#define motRightUStepPin1 04
-#define motRightUStepPin2 27
-#define motRightStepPin 26
-#define motRightDirPin 25
+#define motRightUStepPin1 05
+#define motRightUStepPin2 04
+#define motRightStepPin 33
+#define motRightDirPin 32
 
 // TMC2209 Stepper driver
 #ifdef TMC2209
