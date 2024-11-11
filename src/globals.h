@@ -1,7 +1,7 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-//#define TMC2209 // TMC2209 stepper controller library (currently broken with V2 hardware)
+// #define TMC2209 // TMC2209 stepper controller library (!!!FIX THIS!!! currently broken with V2 hardware)
 
 // only include the web and winsock servers for debug buids as it only needed during development
 #ifdef DEBUG
@@ -14,7 +14,7 @@
 // #define SPIFFSEDITOR // include the SPPIFFS editor
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
 #define INPUT_XBOX // Xbox controller via bluetooth. Dependencies take up quite some program space!
-// #define LED_PINS
+#define LED_LIGHTS
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -47,6 +47,7 @@
 #endif                       // TMC2209
 
 // -- Others
+#define PIN_LED_DATA 02        // pin to the data line of WS2812 LEDs
 #define PIN_BATTERY_VOLTAGE 36 // ADC pin connected to voltage divider
 
 #define PIN_I2C_SDA 21       // MPU SDA pin

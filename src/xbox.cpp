@@ -4,6 +4,7 @@
 #include "xbox.h"
 #include "debug.h"
 #include <XboxSeriesXControllerESP32_asukiaaa.hpp>
+#include "led.h"
 
 #define STEERING_DEADZONE_RADIUS 6
 
@@ -58,9 +59,7 @@ void onXboxNotify()
 
 void onXboxConnect()
 {
-#ifdef LED_PINS
-    digitalWrite(PIN_LED, 1);
-#endif // LED_PINS
+    LED_set(LED_CONTROLLER_CONNECTED, CRGB::Green);
     DB_PRINTLN("Bluetooth MAC address: " + xboxController.buildDeviceAddressStr());
     DB_PRINT(xboxController.xboxNotif.toString());
     DB_PRINTLN("Xbox controller connected");
@@ -68,9 +67,7 @@ void onXboxConnect()
 
 void onXboxDisconnect()
 {
-#ifdef LED_PINS
-    digitalWrite(PIN_LED, 0);
-#endif // LED_PINS
+    LED_set(LED_CONTROLLER_CONNECTED, CRGB::Black);
     DB_PRINTLN("Xbox controller disconnected");
     remoteControl.speed = 0;
     remoteControl.steer = 0;

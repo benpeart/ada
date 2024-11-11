@@ -22,6 +22,7 @@ Also, you have to publish all modifications.
 #ifdef TMC2209
 #include <TMCStepper.h>
 #endif // TMC2209
+#include "led.h"
 #include "wificonnection.h"
 #ifdef WEBSERVER
 #include "webserver.h"
@@ -165,14 +166,8 @@ void setup()
     pidPos.setParameters(1, 0, 1.2, 50);
     pidSpeed.setParameters(6, 5, 0, 20);
 
-#ifdef LED_PINS
-    pinMode(PIN_LED, OUTPUT);
-    pinMode(PIN_LED_LEFT, OUTPUT);
-    pinMode(PIN_LED_RIGHT, OUTPUT);
-    digitalWrite(PIN_LED, 0);
-    digitalWrite(PIN_LED_LEFT, 1); // Turn on one LED to indicate we are live
-    digitalWrite(PIN_LED_RIGHT, 0);
-#endif // LED_PINS
+    // initialize our LED strip and library
+    LED_setup();
 
     // Disable steppers during startup
     pinMode(motEnablePin, OUTPUT);
@@ -271,10 +266,8 @@ void setup()
     Xbox_setup();
 #endif
 
+    LED_set(LED_ENABLED, CRGB::Green);
     DB_PRINTLN("Booted, ready for driving!");
-#ifdef LED_PINS
-    digitalWrite(PIN_LED_RIGHT, 1);
-#endif // LED_PINS
 }
 
 void loop()
@@ -423,10 +416,7 @@ void loop()
                 motLeft.speed = 0;
                 motRight.speed = 0;
                 motEnable(true);
-#ifdef LED_PINS
-                digitalWrite(PIN_LED_LEFT, 0);
-                digitalWrite(PIN_LED_RIGHT, 0);
-#endif // LED_PINS
+                LED_set(LED_ENABLED, CRGB::Red);
             }
             if (abs(filterAngle) < angleEnableThreshold && selfRight)
             {
@@ -448,10 +438,7 @@ void loop()
             { // (re-)enable and reset stuff
                 DB_PRINTLN("control enabled");
                 enableControl = true;
-#ifdef LED_PINS
-                digitalWrite(PIN_LED_LEFT, 1);
-                digitalWrite(PIN_LED_RIGHT, 1);
-#endif // LED_PINS
+                LED_set(LED_ENABLED, CRGB::Green);
                 DB_PRINTLN("control mode: ANGLE_PLUS_POSITION");
                 controlMode = ANGLE_PLUS_POSITION;
 
@@ -474,7 +461,10 @@ void loop()
 #endif // WEBSERVER
     }
 
-    // only have this if we are in debug mode
+    // show any updated LEDs
+    LED_loop();
+
+    // only need this if we are in debug mode
 #ifdef SERIALINPUT
     parseSerial();
 #endif // SERIALINPUT
