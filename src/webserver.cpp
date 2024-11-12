@@ -1,4 +1,5 @@
 #include "globals.h"
+#include "webserver.h"
 #ifdef WEBSERVER
 #include <WiFi.h>
 #include <WiFiUdp.h>
@@ -11,7 +12,6 @@
 #include <SPIFFSEditor.h>
 #endif // SPIFFSEDITOR
 #include "wificonnection.h"
-#include "webserver.h"
 #include "debug.h"
 
 // -- Web server
@@ -20,13 +20,13 @@ WebSocketsServer wsServer = WebSocketsServer(81);
 
 plotType plot;
 
-bool WebServer_setup()
+void WebServer_setup()
 {
     // SPIFFS setup
     if (!SPIFFS.begin(true))
     {
         DB_PRINTLN("SPIFFS mount failed");
-        return false;
+        return;
     }
     else
     {
@@ -44,8 +44,6 @@ bool WebServer_setup()
 
     wsServer.onEvent(webSocketEvent);
     wsServer.begin();
-
-    return true;
 }
 
 void WebServer_loop()
@@ -286,4 +284,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         break;
     }
 }
+#else
+
+void sendWifiList(void) {};
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {};
+void WebServer_setup() {};
+void WebServer_loop() {};
+
 #endif // WEBSERVER

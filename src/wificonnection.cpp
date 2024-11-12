@@ -1,14 +1,13 @@
 #include <Arduino.h>
 #include "globals.h"
+#ifdef WIFI_CONNECTION
 #include <WiFi.h>
 #ifdef MDNS
 #include <ESPmDNS.h>
 #endif // MDNS
 #include <ArduinoOTA.h>
 #include "wificonnection.h"
-#ifdef SERVERS
 #include "webserver.h"
-#endif // SERVERS
 #include "debug.h"
 
 char robotName[32] = "ada"; // -- Used as WiFi network name
@@ -48,7 +47,7 @@ void connectToWifi()
     }
 }
 
-bool WiFi_setup()
+void WiFi_setup()
 {
     // Read robot name
     preferences.getString("robot_name", robotName, sizeof(robotName));
@@ -102,14 +101,10 @@ bool WiFi_setup()
     }
 #endif // MDNS
 
-#ifdef SERVERS
 #ifdef MDNS
     MDNS.addService("http", "tcp", 80);
     MDNS.addService("ws", "tcp", 81);
 #endif // MDNS
-#endif // SERVERS
-
-    return true;
 }
 
 void WiFi_loop()
@@ -125,3 +120,10 @@ void WiFi_loop()
     // check for OTA updates
     ArduinoOTA.handle();
 }
+
+#else
+
+void WiFi_setup() {};
+void WiFi_loop() {};
+
+#endif // WIFI_CONNECTION

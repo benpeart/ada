@@ -24,9 +24,7 @@ Also, you have to publish all modifications.
 #endif // TMC2209
 #include "led.h"
 #include "wificonnection.h"
-#ifdef WEBSERVER
 #include "webserver.h"
-#endif // WEBSERVER
 #ifdef INPUT_PS3
 #include "ps3.h"
 #endif // INPUT_PS3
@@ -46,8 +44,6 @@ float steerAlphaConstant = 0.1; // how fast it reacts to inputs, higher = softer
 
 #define SERIAL2_PORT Serial2 // TMC2208/TMC2224 HardwareSerial port
 #define SERIAL_BAUD_RATE 500000
-#define SERIAL2_RX_PIN 16 // Specify Serial2 RX pin as the default has changed
-#define SERIAL2_TX_PIN 17 // Specify Serial2 TX pin as the default has changed
 
 #define MAX_CURRENT 2000 // in mA; should match capabilities of stepper motor
 #define R_SENSE 0.11f    // Match to your driver
@@ -68,9 +64,7 @@ TMC2209Stepper tmcDriverRight(&SERIAL2_PORT, R_SENSE, DRIVER_ADDRESS_RIGHT); // 
 remoteControlType remoteControl;
 
 // ----- Function prototypes
-#ifdef SERIALINPUT
 void parseSerial();
-#endif // SERIALINPUT
 void setMicroStep(uint8_t uStep);
 
 void IRAM_ATTR motLeftTimerFunction();
@@ -97,7 +91,8 @@ float dT = dT_MICROSECONDS / 1000000.0;
 PID pidAngle(cPID, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
 #define PID_POS_MAX 35
 PID pidPos(cPD, dT, PID_POS_MAX, -PID_POS_MAX);
-PID pidSpeed(cP, dT, PID_POS_MAX, -PID_POS_MAX);
+#define PID_SPEED_MAX 30
+PID pidSpeed(cP, dT, PID_SPEED_MAX, -PID_SPEED_MAX);
 
 // make these global so we can use them in webui.cpp
 uint32_t tNowMs;
@@ -135,18 +130,6 @@ void IRAM_ATTR motRightTimerFunction()
     portEXIT_CRITICAL_ISR(&timerMux);
 }
 
-// optimize unnecessary calls to digitalWrite as it is relatively slow
-void motEnable(boolean enable)
-{
-    static boolean enabled = -1; // ensure the first time we call motEnable, it will actually set the pin correctly
-
-    if (enabled != enable)
-    {
-        digitalWrite(motEnablePin, !enable); // Inverted action on enable pin
-        enabled = enable;
-    }
-}
-
 // ----- Main code
 void setup()
 {
@@ -171,16 +154,18 @@ void setup()
 
     // Disable steppers during startup
     pinMode(motEnablePin, OUTPUT);
-    motEnable(false);
+    digitalWrite(motEnablePin, HIGH); // disable driver in hardware
+
+    // setup micro stepping/serial address pins for output
+    pinMode(motLeftUStepPin1, OUTPUT);
+    pinMode(motLeftUStepPin2, OUTPUT);
+    pinMode(motRightUStepPin1, OUTPUT);
+    pinMode(motRightUStepPin2, OUTPUT);
 
 #ifdef TMC2209
     // use TMC2209 pins MS1 and MS2 to set the correct address for Serial control
-    pinMode(motLeftUStepPin1, OUTPUT);
-    pinMode(motLeftUStepPin2, OUTPUT);
     digitalWrite(motLeftUStepPin1, LOW);
     digitalWrite(motLeftUStepPin2, LOW);
-    pinMode(motRightUStepPin1, OUTPUT);
-    pinMode(motRightUStepPin2, OUTPUT);
     digitalWrite(motRightUStepPin1, HIGH);
     digitalWrite(motRightUStepPin2, LOW);
 
@@ -208,14 +193,12 @@ void setup()
         tmcDriverRight.rms_current(MAX_CURRENT); // Set stepper current to MAX_CURRENT in mA
 
         // configure microstepping
-        tmcDriverLeft.mstep_reg_select(true);  // Microstep resolution selected by MRES register
-        tmcDriverRight.mstep_reg_select(true); // Microstep resolution selected by MRES register
+        tmcDriverLeft.mstep_reg_select(true);  // Microstep resolution selected by MRES register instead of MS1 and MS2 pins
+        tmcDriverRight.mstep_reg_select(true); // Microstep resolution selected by MRES register instead of MS1 and MS2 pins
 
         // enable CoolStep to save up to 75% of energy
         tmcDriverLeft.TCOOLTHRS(0xFFFF);  // Set threshold for CoolStep
         tmcDriverRight.TCOOLTHRS(0xFFFF); // Set threshold for CoolStep
-        tmcDriverLeft.SGTHRS(10);         // Set StallGuard threshold
-        tmcDriverRight.SGTHRS(10);        // Set StallGuard threshold
         tmcDriverLeft.semin(5);           // Minimum current adjustment min = 1, max = 15
         tmcDriverRight.semin(5);          // Minimum current adjustment min = 1, max = 15
         tmcDriverLeft.semax(2);           // Maximum current adjustment min = 0, max = 15, 0-2 recommended
@@ -227,16 +210,9 @@ void setup()
         // SpreadCycle provides high dynamics (reacting at once to a change of motor velocity) and highest peak velocity at low vibration
         tmcDriverLeft.en_spreadCycle(false);  // Toggle spreadCycle on TMC2208/2209/2224. false = StealthChop (low speed) / true = SpreadCycle (faster speeds)
         tmcDriverRight.en_spreadCycle(false); // Toggle spreadCycle on TMC2208/2209/2224. false = StealthChop (low speed) / true = SpreadCycle (faster speeds)
-        tmcDriverLeft.pwm_autoscale(true);    // Needed for stealthChop
-        tmcDriverRight.pwm_autoscale(true);   // Needed for stealthChop
+        tmcDriverLeft.pwm_autoscale(true);    // Enable automatic current scaling for stealthChop
+        tmcDriverRight.pwm_autoscale(true);   // Enable automatic current scaling for stealthChop
     }
-
-#else
-    // setup micro steping pins
-    pinMode(motLeftUStepPin1, OUTPUT);
-    pinMode(motLeftUStepPin2, OUTPUT);
-    pinMode(motRightUStepPin1, OUTPUT);
-    pinMode(motRightUStepPin2, OUTPUT);
 
 #endif // TMC2209
 
@@ -251,10 +227,8 @@ void setup()
     // Connect to WiFi and setup for OTA updates
     WiFi_setup();
 
-#ifdef WEBSERVER
     // setup the AsyncWebServer and WebSocketsServer
     WebServer_setup();
-#endif // WEBSERVER
 
 // Setup PS3 controller
 #ifdef INPUT_PS3
@@ -290,6 +264,51 @@ void loop()
     tNowMs = millis();
 
     WiFi_loop();
+
+#ifdef TMC2209
+    // Debugging code to try and figure out why I can't use the TMC2209 code path.
+    // Turns out, if we connect and are powered by USB, it all works fine.
+    // If we are powered by the battery (no USB) we can't connect via the Serial/UART code path.
+    // Current theroy is that I need to isolate the signal using a capacitor or use a pull down
+    // resister on the TX/RX line (different grounds like when I was doing the audio amplifier).
+    EVERY_N_MILLISECONDS(500)
+    {
+        if (tmcDriverLeft.test_connection())
+        {
+            static bool lit = false;
+            LED_set(LED_ENABLED, lit ? CRGB::Red : CRGB::Black);
+            lit = !lit;
+        }
+        if (tmcDriverRight.test_connection())
+        {
+            static bool lit = false;
+            LED_set(LED_CONTROLLER_CONNECTED, lit ? CRGB::Red : CRGB::Black);
+            lit = !lit;
+        }
+#if 0        
+        if (tmcDriverLeft.microsteps() != 16)
+        {
+            DB_PRINTF("tmcDriverLeft.microsteps() = %u\r\n", tmcDriverLeft.microsteps());
+            tmcDriverLeft.microsteps(16);
+            LED_set(LED_ENABLED, CRGB::Yellow);
+        }
+        else
+        {
+            LED_set(LED_ENABLED, CRGB::Blue);
+        }
+        if (tmcDriverRight.microsteps() != 16)
+        {
+            DB_PRINTF("tmcDriverRight.microsteps() = %u\r\n", tmcDriverRight.microsteps());
+            tmcDriverRight.microsteps(16);
+            LED_set(LED_CONTROLLER_CONNECTED, CRGB::Yellow);
+        }
+        else
+        {
+            LED_set(LED_CONTROLLER_CONNECTED, CRGB::Blue);
+        }
+#endif
+    }
+#endif // TMC2209
 
     if (tNow - tLast > dT_MICROSECONDS)
     {
@@ -415,7 +434,7 @@ void loop()
                 enableControl = false;
                 motLeft.speed = 0;
                 motRight.speed = 0;
-                motEnable(true);
+                digitalWrite(motEnablePin, HIGH); // disable driver in hardware
                 LED_set(LED_ENABLED, CRGB::Red);
             }
             if (abs(filterAngle) < angleEnableThreshold && selfRight)
@@ -443,7 +462,7 @@ void loop()
                 controlMode = ANGLE_PLUS_POSITION;
 
                 avgMotSpeedSum = 0;
-                motEnable(true); // Enable motors
+                digitalWrite(motEnablePin, LOW); // enable driver in hardware
                 motLeft.setStep(0);
                 motRight.setStep(0);
                 pidAngle.reset();
@@ -456,18 +475,13 @@ void loop()
 
         motLeft.update();
         motRight.update();
-#ifdef WEBSERVER
         WebServer_loop();
-#endif // WEBSERVER
     }
 
     // show any updated LEDs
     LED_loop();
 
-    // only need this if we are in debug mode
-#ifdef SERIALINPUT
     parseSerial();
-#endif // SERIALINPUT
 
     // Handle PS3 controller
 #ifdef INPUT_PS3
@@ -480,9 +494,9 @@ void loop()
 #endif
 }
 
-#ifdef SERIALINPUT
 void parseSerial()
 {
+#ifdef SERIALINPUT
     static char serialBuf[63];
     static uint8_t pos = 0;
     char currentChar;
@@ -500,10 +514,12 @@ void parseSerial()
             memset(serialBuf, 0, sizeof(serialBuf));
         }
     }
+#endif // SERIALINPUT
 }
 
 void parseCommand(char *data, uint8_t length)
 {
+#ifdef SERIALINPUT
     float val2;
     if ((data[length - 1] == 'x') && length >= 3)
     {
@@ -578,7 +594,6 @@ void parseCommand(char *data, uint8_t length)
         case 'g':
             gyroGain = atof(data + 1);
             break;
-#ifdef WEBSERVER
         case 'p':
         {
             switch (data[1])
@@ -592,7 +607,6 @@ void parseCommand(char *data, uint8_t length)
             }
             break;
         }
-#endif // WEBSERVER
         case 'j':
             gyroGain = atof(data + 1);
             break;
@@ -630,7 +644,6 @@ void parseCommand(char *data, uint8_t length)
                 ESP.restart();
                 // pidParList.sendList(&wsServer);
                 break;
-#ifdef WEBSERVER
             case 'l': // Send wifi networks to WS client
                 sendWifiList();
                 break;
@@ -652,7 +665,6 @@ void parseCommand(char *data, uint8_t length)
                 preferences.putUInt("wifi_mode", atoi(&data[2]));
                 DB_PRINTF("Updated WiFi mode to (0=access point, 1=connect to SSID): %d\n", atoi(&data[2]));
                 break;
-#endif                // WEBSERVER
             case 'n': // Robot name
                 len = length - 3;
                 memcpy(buf, &data[2], len);
@@ -665,8 +677,8 @@ void parseCommand(char *data, uint8_t length)
         }
         }
     }
-}
 #endif // SERIALINPUT
+}
 
 void setMicroStep(uint8_t uStep)
 {
@@ -685,20 +697,20 @@ void setMicroStep(uint8_t uStep)
     switch (uStep)
     {
     case 8:
-        ms1 = 0;
-        ms2 = 0;
+        ms1 = LOW;
+        ms2 = LOW;
         break;
     case 16:
-        ms1 = 1;
-        ms2 = 1;
+        ms1 = HIGH;
+        ms2 = HIGH;
         break;
     case 32:
-        ms1 = 1;
-        ms2 = 0;
+        ms1 = HIGH;
+        ms2 = LOW;
         break;
     case 64:
-        ms1 = 0;
-        ms2 = 1;
+        ms1 = LOW;
+        ms2 = HIGH;
         break;
     }
     digitalWrite(motLeftUStepPin1, ms1);
@@ -723,10 +735,10 @@ void setMicroStep(uint8_t uStep)
 #ifdef STEPPER_DRIVER_A4988 // The lookup table for uStepping of the 4988 writes for some reason all three pins high for 1/16th step
     if (uStep == 16)
     {
-        digitalWrite(motLeftUStepPin1, 1);
-        digitalWrite(motLeftUStepPin2, 1);
-        digitalWrite(motRightUStepPin1, 1);
-        digitalWrite(motRightUStepPin2, 1);
+        digitalWrite(motLeftUStepPin1, HIGH);
+        digitalWrite(motLeftUStepPin2, HIGH);
+        digitalWrite(motRightUStepPin1, HIGH);
+        digitalWrite(motRightUStepPin2, HIGH);
     }
 #endif
 #endif // STEPPER_DRIVER_TMC2209

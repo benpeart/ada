@@ -1,8 +1,6 @@
 #ifndef MYWEBSERVER_H // can't define this as WEBSERVER_H or it conflicts in ESPAsyncWebServer.h
 #define MYWEBSERVER_H
 
-#ifdef WEBSERVER
-
 #include <Arduino.h>
 #include <WebSocketsServer.h>
 
@@ -32,8 +30,7 @@ typedef struct
 void sendWifiList(void);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
 
-bool WebServer_setup();
+void WebServer_setup();
 void WebServer_loop();
 
-#endif // WEBSERVER
 #endif // MYWEBSERVER_H

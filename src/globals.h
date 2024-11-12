@@ -1,17 +1,15 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-// #define TMC2209 // TMC2209 stepper controller library (!!!FIX THIS!!! currently broken with V2 hardware)
 
-// only include the web and winsock servers for debug buids as it only needed during development
-#ifdef DEBUG
-#define WEBSERVER
-#define SERIALINPUT
-#define BATTERY_VOLTAGE
-#endif // DEBUG
-
+#define WIFI_CONNECTION
+// #define WEBSERVER
+// #define SERIALINPUT
+// #define BATTERY_VOLTAGE
 // #define MDNS // include MDNS support
 // #define SPIFFSEDITOR // include the SPPIFFS editor
+// #define TMC2209 // TMC2209 stepper controller library (!!!FIX THIS!!! currently broken with V2 hardware)
+// #define DYNAMIC_MICROSTEPPING
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
 #define INPUT_XBOX // Xbox controller via bluetooth. Dependencies take up quite some program space!
 #define LED_LIGHTS
@@ -20,9 +18,7 @@
 #include <Preferences.h>
 #include <fastStepper.h>
 #include "PID.h"
-#ifdef WEBSERVER
 #include "webserver.h"
-#endif // WEBSERVER
 
 // ESP32 Pin Assignments
 
@@ -40,11 +36,8 @@
 #define motRightDirPin 32
 
 // TMC2209 Stepper driver
-#ifdef TMC2209
-#define SERIAL2_PORT Serial2 // TMC2208/TMC2224 HardwareSerial port
 #define SERIAL2_RX_PIN 16    // Specify Serial2 RX pin as the default has changed
 #define SERIAL2_TX_PIN 17    // Specify Serial2 TX pin as the default has changed
-#endif                       // TMC2209
 
 // -- Others
 #define PIN_LED_DATA 02        // pin to the data line of WS2812 LEDs
@@ -59,19 +52,14 @@ extern Preferences preferences;
 extern fastStepper motLeft;
 extern fastStepper motRight;
 
-#ifdef SERIALINPUT
 void parseCommand(char *data, uint8_t length);
-#endif // SERIALINPUT
 
 extern float filterAngle;
 extern float gyroFilterConstant;
 extern float gyroGain;
 
 // these are all needed so we can plot them in the WebUI
-#ifdef BATTERY_VOLTAGE
 extern uint32_t tNowMs;
-#endif // BATTERY_VOLTAGE
-#ifdef WEBSERVER
 extern plotType plot;
 extern float maxStepSpeed;
 
@@ -84,7 +72,6 @@ extern float pidPosOutput;
 extern float pidSpeedOutput;
 extern float speedAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
 extern float steerAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
-#endif                           // WEBSERVER
 
 /*  Remote control structure
     Every remote should give a speed and steer command from -100 ... 100

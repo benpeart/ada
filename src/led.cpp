@@ -1,10 +1,9 @@
 #include <Arduino.h>
 #include "globals.h"
-#include "led.h"
 
 #ifdef LED_LIGHTS
 
-// array of LED pixels
+#include "led.h"
 #include <FastLED.h>
 
 #define NUM_LEDS 5 // number of LEDs on strip
@@ -67,7 +66,7 @@ void heartBeat()
 
 static float pulseSpeed = 0.75; // Larger value gives faster pulse.
 
-float valueMin = 64.0;  // Pulse minimum value (Should be less then valueMax).
+float valueMin = 32.0;  // Pulse minimum value (Should be less then valueMax).
 float valueMax = 255.0; // Pulse maximum value (Should be larger then valueMin).
 
 float val = valueMin;                                    // Do Not Edit
