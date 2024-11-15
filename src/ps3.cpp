@@ -31,8 +31,6 @@ void onPs3Notify()
         remoteControl.selfRight = true;
     if (Ps3.event.button_down.cross)
         remoteControl.disableControl = true;
-    if (Ps3.event.button_down.square)
-        remoteControl.override = true;
     if (Ps3.event.button_down.r1)
     {
         if (remoteControl.speedOffset < 20.0)

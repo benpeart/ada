@@ -77,12 +77,9 @@ extern float steerAlphaConstant; // how fast it reacts to inputs, higher = softe
     Every remote should give a speed and steer command from -100 ... 100
     To adjust "driving experience", e.g. a slow beginners mode, or a fast expert mode, a gain can be adjusted for the speed and steer inputs.
     Additionaly, a selfRight input can be used. When setting this bit to true, the robot will enable control in an attempt to self right.
-    The override input can be used to control the robot when it is lying flat.
-    The robot will switch automatically from override to balancing mode, if it happens to right itself.
     The disable control input can be used to
         1) disable the balancing mode
         2) disable the self-right attempt
-        3) disable the override mode
     Depending on which state the robot is in.
 */
 typedef struct
@@ -94,7 +91,6 @@ typedef struct
     float speedOffset = 0.0;
     bool selfRight = false;
     bool disableControl = false;
-    bool override = false;
 } remoteControlType;
 extern remoteControlType remoteControl;
 #endif // GLOBALS_H

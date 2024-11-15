@@ -39,8 +39,6 @@ void onXboxNotify()
         remoteControl.selfRight = true;
     if (xboxController.xboxNotif.btnA)
         remoteControl.disableControl = true;
-    if (xboxController.xboxNotif.btnX)
-        remoteControl.override = true;
     if (xboxController.xboxNotif.btnRB)
     {
         if (remoteControl.speedOffset < 20.0)
