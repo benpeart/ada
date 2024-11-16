@@ -2,7 +2,7 @@
 #define GLOBALS_H
 
 
-#define WIFI_CONNECTION
+// #define WIFI_CONNECTION
 // #define WEBSERVER
 // #define SERIALINPUT
 // #define BATTERY_VOLTAGE
@@ -10,8 +10,10 @@
 // #define SPIFFSEDITOR // include the SPPIFFS editor
 // #define TMC2209 // TMC2209 stepper controller library (!!!FIX THIS!!! currently broken with V2 hardware)
 // #define DYNAMIC_MICROSTEPPING
+// #define DEBUG_SPINNERS
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
 #define INPUT_XBOX // Xbox controller via bluetooth. Dependencies take up quite some program space!
+#define FINITE_STATE_MACHINE
 #define LED_LIGHTS
 
 #include <Arduino.h>

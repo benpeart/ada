@@ -65,7 +65,7 @@ void onXboxConnect()
 
 void onXboxDisconnect()
 {
-    LED_set(LED_CONTROLLER_CONNECTED, CRGB::Black);
+    LED_set(LED_CONTROLLER_CONNECTED, CRGB::Red);
     DB_PRINTLN("Xbox controller disconnected");
     remoteControl.speed = 0;
     remoteControl.steer = 0;
@@ -75,6 +75,7 @@ void onXboxDisconnect()
 
 void Xbox_setup()
 {
+    LED_set(LED_CONTROLLER_CONNECTED, CRGB::Red);
     xboxController.begin();
 }
 

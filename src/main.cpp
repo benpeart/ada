@@ -19,6 +19,9 @@ Also, you have to publish all modifications.
 #include <Arduino.h>
 #include "globals.h"
 #include <gyro.h>
+#ifdef FINITE_STATE_MACHINE
+#include "fsm.h"
+#endif // FINITE_STATE_MACHINE
 #ifdef TMC2209
 #include <TMCStepper.h>
 #endif // TMC2209
@@ -91,7 +94,7 @@ float dT = dT_MICROSECONDS / 1000000.0;
 PID pidAngle(cPID, dT, PID_ANGLE_MAX, -PID_ANGLE_MAX);
 #define PID_POS_MAX 35
 PID pidPos(cPD, dT, PID_POS_MAX, -PID_POS_MAX);
-#define PID_SPEED_MAX 30
+#define PID_SPEED_MAX 27
 PID pidSpeed(cP, dT, PID_SPEED_MAX, -PID_SPEED_MAX);
 
 // make these global so we can use them in webui.cpp
@@ -102,7 +105,6 @@ float pidSpeedOutput;
 
 enum controlType
 {
-    ANGLE_ONLY = 0,
     ANGLE_PLUS_POSITION,
     ANGLE_PLUS_SPEED
 };
@@ -155,6 +157,7 @@ void setup()
     // Disable steppers during startup
     pinMode(motEnablePin, OUTPUT);
     digitalWrite(motEnablePin, HIGH); // disable driver in hardware
+    LED_set(LED_ENABLED, CRGB::Red);
 
     // setup micro stepping/serial address pins for output
     pinMode(motLeftUStepPin1, OUTPUT);
@@ -240,12 +243,29 @@ void setup()
     Xbox_setup();
 #endif
 
-    LED_set(LED_ENABLED, CRGB::Green);
     DB_PRINTLN("Booted, ready for driving!");
 }
 
 void loop()
 {
+#ifdef FINITE_STATE_MACHINE
+    static BalanceController bc;
+    static unsigned long tLast = 0;
+    unsigned long tNow = micros();
+    tNowMs = millis();
+
+    WiFi_loop();
+
+    // run the balancing logic
+    bc.loop(filterAngle, &remoteControl);
+
+    // update the web page
+    if (tNow - tLast > dT_MICROSECONDS)
+    {
+        tLast = tNow;
+        WebServer_loop();
+    }
+#else
     static unsigned long tLast = 0;
     float avgMotSpeed;
     static float smoothedSteer = 0;
@@ -271,6 +291,7 @@ void loop()
     // If we are powered by the battery (no USB) we can't connect via the Serial/UART code path.
     // Current theroy is that I need to isolate the signal using a capacitor or use a pull down
     // resister on the TX/RX line (different grounds like when I was doing the audio amplifier).
+    // https://next-hack.com/index.php/2020/02/15/how-to-interface-a-3-3v-output-to-a-5v-input/
     EVERY_N_MILLISECONDS(500)
     {
         if (tmcDriverLeft.test_connection())
@@ -364,11 +385,7 @@ void loop()
             }
 
             // Actual controller computations
-            if (controlMode == ANGLE_ONLY)
-            {
-                pidAngle.setpoint = smoothedSpeed * 2;
-            }
-            else if (controlMode == ANGLE_PLUS_POSITION)
+            if (controlMode == ANGLE_PLUS_POSITION)
             {
                 avgMotStep = (motLeft.getStep() + motRight.getStep()) / 2;
                 pidPos.setpoint = smoothedSpeed;
@@ -396,6 +413,18 @@ void loop()
             motLeft.speed = avgMotSpeed + smoothedSteer;
             motRight.speed = avgMotSpeed - smoothedSteer;
 
+            // Dynamically switch microstepping to achieve even more insane speeds
+#ifdef DYNAMIC_MICROSTEPPING
+            absSpeed = abs(avgMotSpeed);
+
+            if (absSpeed > (150 * 32 / microStep) && microStep > 1)
+                microStep /= 2;
+            if (absSpeed < (130 * 32 / microStep) && microStep < 32)
+                microStep *= 2;
+
+            setMicroStep(microStep);
+#endif // DYNAMIC_MICROSTEPPING
+
             // Detect if robot has fallen. Concept: integrate angle controller error over time.
             // If absolute integrated error surpasses threshold, disable controller
             angleErrorIntegral += (pidAngle.setpoint - pidAngle.input) * dT;
@@ -415,18 +444,6 @@ void loop()
                 }
             }
 
-            // Dynamically switch microstepping to achieve even more insane speeds
-#ifdef DYNAMIC_MICROSTEPPING
-            absSpeed = abs(avgMotSpeed);
-
-            if (absSpeed > (150 * 32 / microStep) && microStep > 1)
-                microStep /= 2;
-            if (absSpeed < (130 * 32 / microStep) && microStep < 32)
-                microStep *= 2;
-
-            setMicroStep(microStep);
-#endif // DYNAMIC_MICROSTEPPING
-
             // Disable control if robot is almost horizontal. Re-enable if upright.
             if ((abs(filterAngle) > angleDisableThreshold && !selfRight) || disableControl)
             {
@@ -437,6 +454,8 @@ void loop()
                 digitalWrite(motEnablePin, HIGH); // disable driver in hardware
                 LED_set(LED_ENABLED, CRGB::Red);
             }
+
+            // Detect that we have successfully self righted.
             if (abs(filterAngle) < angleEnableThreshold && selfRight)
             {
                 selfRight = false;
@@ -457,12 +476,12 @@ void loop()
             { // (re-)enable and reset stuff
                 DB_PRINTLN("control enabled");
                 enableControl = true;
-                LED_set(LED_ENABLED, CRGB::Green);
                 DB_PRINTLN("control mode: ANGLE_PLUS_POSITION");
                 controlMode = ANGLE_PLUS_POSITION;
 
-                avgMotSpeedSum = 0;
                 digitalWrite(motEnablePin, LOW); // enable driver in hardware
+                LED_set(LED_ENABLED, CRGB::Green);
+                avgMotSpeedSum = 0;
                 motLeft.setStep(0);
                 motRight.setStep(0);
                 pidAngle.reset();
@@ -477,6 +496,7 @@ void loop()
         motRight.update();
         WebServer_loop();
     }
+#endif // FINITE_STATE_MACHINE
 
     // show any updated LEDs
     LED_loop();
