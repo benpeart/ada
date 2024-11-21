@@ -5,7 +5,7 @@
 // #define WIFI_CONNECTION
 // #define WEBSERVER
 // #define SERIALINPUT
-// #define BATTERY_VOLTAGE
+#define BATTERY_VOLTAGE
 // #define MDNS // include MDNS support
 // #define SPIFFSEDITOR // include the SPPIFFS editor
 // #define TMC2209 // TMC2209 stepper controller library (!!!FIX THIS!!! currently broken with V2 hardware)

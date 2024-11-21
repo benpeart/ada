@@ -132,6 +132,37 @@ void IRAM_ATTR motRightTimerFunction()
     portEXIT_CRITICAL_ISR(&timerMux);
 }
 
+#define BATTERY_VOLTAGE_USB 5       // the voltage when running via USB instead of the battery
+#define BATTERY_VOLTAGE_LOW 20      // the voltage we warn the user
+#define BATTERY_VOLTAGE_SHUTDOWN 18 // the voltage we shutdown to prevent damaging the battery
+#define BATTERY_VOLTAGE_FULL 22.3   // the voltage of a full battery
+
+float BatteryVoltage()
+{
+    // Measure battery voltage
+#ifdef BATTERY_VOLTAGE
+    const float R1 = 100000.0;        // 100kΩ
+    const float R2 = 10000.0;         // 10kΩ
+    const float ADC_MAX = 4095.0;     // 12-bit ADC
+    const float V_REF = 3.3;          // Reference voltage
+    const float ALPHA = 0.05;         // low pass filter
+    static float filteredBattery = 0; // use a low-pass filter to smooth battery readings
+
+    int adcValue = analogRead(PIN_BATTERY_VOLTAGE);
+    float voltage = (adcValue / ADC_MAX) * V_REF;
+    float batteryVoltage = voltage * (R1 + R2) / R2;
+
+    // take the first and filter the rest
+    if (!filteredBattery)
+        filteredBattery = batteryVoltage;
+    else
+        filteredBattery = (ALPHA * batteryVoltage) + ((1 - ALPHA) * filteredBattery);
+
+    // Send battery voltage readout periodically to web page, if any clients are connected
+    return filteredBattery;
+#endif // BATTERY_VOLTAGE
+}
+
 // ----- Main code
 void setup()
 {
@@ -153,6 +184,7 @@ void setup()
 
     // initialize our LED strip and library
     LED_setup();
+    LED_set(LED_BATTERY, CRGB::Green);
 
     // Disable steppers during startup
     pinMode(motEnablePin, OUTPUT);
@@ -248,13 +280,42 @@ void setup()
 
 void loop()
 {
+    // track the battery voltage and do nothing if we get below BATTERY_VOLTAGE_SHUTDOWN 
+    static float voltage = BATTERY_VOLTAGE_FULL;
+    if (voltage <= BATTERY_VOLTAGE_SHUTDOWN)
+        return;
+
+    WiFi_loop();
+
 #ifdef FINITE_STATE_MACHINE
     static BalanceController bc;
     static unsigned long tLast = 0;
     unsigned long tNow = micros();
     tNowMs = millis();
 
-    WiFi_loop();
+    // check the battery voltage and if necessary, inform the user
+    EVERY_N_MILLISECONDS(500)
+    {
+        voltage = BatteryVoltage();
+
+        // check to see if we're running via USB instead of the battery
+        if (voltage < BATTERY_VOLTAGE_USB)
+            voltage = BATTERY_VOLTAGE_FULL;
+
+        if (voltage < BATTERY_VOLTAGE_LOW)
+        {
+            LED_set(LED_BATTERY, CRGB::Yellow);
+        }
+        if (voltage <= BATTERY_VOLTAGE_SHUTDOWN)
+        {
+            DB_PRINTF("Battery voltage is critically low (%.1f). Entering deep sleep mode...\n", voltage);
+            LED_set(LED_BATTERY, CRGB::Red);
+            LED_loop();
+            bc.setState(Disabled::GetInstance(), 0, NULL);
+            esp_deep_sleep_start(); // Enter deep sleep mode
+            return;
+        }
+    }
 
     // run the balancing logic
     bc.loop(filterAngle, &remoteControl);
@@ -282,8 +343,6 @@ void loop()
 
     unsigned long tNow = micros();
     tNowMs = millis();
-
-    WiFi_loop();
 
 #ifdef TMC2209
     // Debugging code to try and figure out why I can't use the TMC2209 code path.

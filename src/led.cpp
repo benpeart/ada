@@ -6,7 +6,6 @@
 #include "led.h"
 #include <FastLED.h>
 
-#define NUM_LEDS 5 // number of LEDs on strip
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
 #define BRIGHTNESS 32

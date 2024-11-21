@@ -5,11 +5,13 @@
 
 typedef enum
 {
-    LED_ENABLED = 0,
+    LED_BATTERY = 0,
+    LED_ENABLED,
     LED_CONTROLLER_CONNECTED,
     LED_EYES,
     LED_EARS,
-    LED_BELLY
+    LED_BELLY,
+    NUM_LEDS        // number of LEDs
 } LedLights;
 
 void LED_setup();

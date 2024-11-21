@@ -319,16 +319,34 @@ BalanceController::BalanceController()
     smoothedSpeed = 0;
     lastInputTime = 0;
     avgMotSpeedSum = 0;
-    setState(Disabled::GetInstance(), 0, NULL);
+    m_currentState = Disabled::GetInstance();
+}
+
+const char *stateName(BalanceState *state)
+{
+#ifdef DEBUG
+    if (state == Disabled::GetInstance())
+        return "Disabled";
+    if (state == Driving::GetInstance())
+        return "Driving";
+    if (state == Position::GetInstance())
+        return "Position";
+    if (state == SelfRight::GetInstance())
+        return "SelfRight";
+#endif
+    return "Unknown";
 }
 
 void BalanceController::setState(BalanceState *newState, float filterAngle, remoteControlType *remoteControl)
 {
-    DB_PRINTF("BalanceController::setState leaving state %p\n", (void *)m_currentState);
+    if (m_currentState == newState)
+        return;
+
+    DB_PRINTF("BalanceController::setState leaving state %s\n", stateName(m_currentState));
     m_currentState->exit(this);                              // let the old state clean up after itself
     m_currentState = newState;                               // actually change states
-    m_currentState->enter(this, filterAngle, remoteControl); // let the new state initialize 
-    DB_PRINTF("BalanceController::setState entering state %p\n", (void *)m_currentState);
+    m_currentState->enter(this, filterAngle, remoteControl); // let the new state initialize
+    DB_PRINTF("BalanceController::setState entering state %s\n", stateName(m_currentState));
 }
 
 void BalanceController::loop(float filterAngle, remoteControlType *remoteControl)
