@@ -64,15 +64,14 @@ void balanceLogic(BalanceController *controller, float filterAngle)
 
     controller->avgMotSpeedSum += pidAngleOutput / 2;
     controller->avgMotSpeedSum = constrain(controller->avgMotSpeedSum, -maxStepSpeed, maxStepSpeed);
-    float avgMotSpeed = controller->avgMotSpeedSum;
 
     // add in steering input
-    motLeft.speed = avgMotSpeed + controller->smoothedSteer;
-    motRight.speed = avgMotSpeed - controller->smoothedSteer;
+    motLeft.speed = controller->avgMotSpeedSum + controller->smoothedSteer;
+    motRight.speed = controller->avgMotSpeedSum - controller->smoothedSteer;
 
     // Dynamically switch microstepping to achieve even more insane speeds
 #ifdef DYNAMIC_MICROSTEPPING
-    float absSpeed = abs(avgMotSpeed);
+    float absSpeed = abs(controller->avgMotSpeedSum);
 
     if (absSpeed > (150 * 32 / microStep) && microStep > 1)
         microStep /= 2;
@@ -81,11 +80,6 @@ void balanceLogic(BalanceController *controller, float filterAngle)
 
     setMicroStep(microStep);
 #endif // DYNAMIC_MICROSTEPPING
-}
-
-Disabled::Disabled()
-{
-    needToExitEnableZone = false;
 }
 
 Disabled *Disabled::GetInstance()
@@ -100,12 +94,14 @@ void Disabled::enter(BalanceController *controller, float filterAngle, remoteCon
     // Otherwise robot will immediately enter the "Position" mode when it detects we're still standing.
     if (remoteControl && remoteControl->disableControl)
     {
+        DB_PRINTLN("Disabled::enter - set needToExitEnableZone");
         needToExitEnableZone = true;
         remoteControl->disableControl = false; // Reset single action bool
     }
 
     digitalWrite(motEnablePin, HIGH); // disable driver in hardware
     LED_set(LED_ENABLED, CRGB::Red);
+    controller->avgMotSpeedSum = 0;
     motLeft.speed = 0;
     motRight.speed = 0;
 }
@@ -119,15 +115,16 @@ void Disabled::loop(BalanceController *controller, float filterAngle, remoteCont
     i = (i + 1) % sizeof(spinner);
 #endif // DEBUG_SPINNERS
 
-    // Reset needToExitEnableZone flag when angle is out of "enable" zone
-    if (needToExitEnableZone && (abs(filterAngle) > angleEnableThreshold + 5))
+    // clear needToExitEnableZone flag when angle is out of "enable" zone
+    if (needToExitEnableZone && (abs(filterAngle) > (angleEnableThreshold + 5)))
     {
-        DB_PRINTLN("Disabled - clear needToExitEnableZone");
+        DB_PRINTLN("Disabled::loop - clear needToExitEnableZone");
         needToExitEnableZone = false;
+        remoteControl->disableControl = false; // Reset single action bool as it may have been set with a long press
     }
 
     // detect if we've become vertical and transition to Position
-    if (!needToExitEnableZone && abs(filterAngle) < angleEnableThreshold)
+    if (!needToExitEnableZone && (abs(filterAngle) < angleEnableThreshold))
     {
         DB_PRINTLN("Disabled->Position - Robot is standing");
         controller->setState(Position::GetInstance(), filterAngle, remoteControl);
@@ -143,18 +140,17 @@ void Disabled::loop(BalanceController *controller, float filterAngle, remoteCont
     }
 }
 
-void Disabled::exit(BalanceController *controller)
+void Disabled::exit(BalanceController *controller, float filterAngle, remoteControlType *remoteControl)
 {
     // (re-)enable and reset stuff
     digitalWrite(motEnablePin, LOW); // enable driver in hardware
     LED_set(LED_ENABLED, CRGB::Green);
-    controller->avgMotSpeedSum = 0;
-    motLeft.setStep(0);
-    motRight.setStep(0);
     pidAngle.reset();
     pidPos.reset();
     pidSpeed.reset();
-    angleErrorIntegral = 0; // Reset, otherwise the fall detection will be triggered immediately
+    angleErrorIntegral = 0;                // Reset, otherwise the fall detection will be triggered immediately
+    needToExitEnableZone = false;          // Reset in case we self right
+    remoteControl->disableControl = false; // Reset single action bool as it may have been set with a long press
 }
 
 Driving *Driving::GetInstance()
@@ -165,8 +161,6 @@ Driving *Driving::GetInstance()
 
 void Driving::enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl)
 {
-    motLeft.setStep(0);
-    motRight.setStep(0);
     pidSpeed.reset();
 }
 
@@ -218,6 +212,13 @@ Position *Position::GetInstance()
 {
     static Position m_singleton;
     return &m_singleton;
+}
+
+void Position::enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl)
+{
+    motLeft.setStep(0);
+    motRight.setStep(0);
+    pidPos.reset();
 }
 
 void Position::loop(BalanceController *controller, float filterAngle, remoteControlType *remoteControl)
@@ -304,22 +305,9 @@ void SelfRight::loop(BalanceController *controller, float filterAngle, remoteCon
         return;
     }
 
-    // Actual balance + controller computations
-    pidSpeed.setpoint = controller->smoothedSpeed;
-    pidSpeed.input = -controller->avgMotSpeedSum / 100.0;
-    pidSpeedOutput = pidSpeed.calculate();
-    pidAngle.setpoint = pidSpeedOutput;
+    // Ignore the throttle/speed and just stand up
+    pidAngle.setpoint = 0;
     balanceLogic(controller, filterAngle);
-}
-
-BalanceController::BalanceController()
-{
-    // start off in the disabled state
-    smoothedSteer = 0;
-    smoothedSpeed = 0;
-    lastInputTime = 0;
-    avgMotSpeedSum = 0;
-    m_currentState = Disabled::GetInstance();
 }
 
 const char *stateName(BalanceState *state)
@@ -343,10 +331,10 @@ void BalanceController::setState(BalanceState *newState, float filterAngle, remo
         return;
 
     DB_PRINTF("BalanceController::setState leaving state %s\n", stateName(m_currentState));
-    m_currentState->exit(this);                              // let the old state clean up after itself
-    m_currentState = newState;                               // actually change states
-    m_currentState->enter(this, filterAngle, remoteControl); // let the new state initialize
+    m_currentState->exit(this, filterAngle, remoteControl); // let the old state clean up after itself
+    m_currentState = newState;                              // actually change states
     DB_PRINTF("BalanceController::setState entering state %s\n", stateName(m_currentState));
+    m_currentState->enter(this, filterAngle, remoteControl); // let the new state initialize
 }
 
 void BalanceController::loop(float filterAngle, remoteControlType *remoteControl)

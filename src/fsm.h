@@ -31,22 +31,20 @@ class BalanceState
 public:
     virtual void enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) = 0;
     virtual void loop(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) = 0;
-    virtual void exit(BalanceController *controller) = 0;
+    virtual void exit(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) = 0;
 };
 
 class Disabled : public BalanceState
 {
     // Used ensure we are out of the 'enabled' zone before exiting state Disabled if it was triggered by the controller.
     // Otherwise robot will immediately enter the "Position" mode when it detects we're still standing.
-    bool needToExitEnableZone;
-
-    Disabled();
+    bool needToExitEnableZone = false;
 
 public:
     static Disabled *GetInstance();
-    void enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) override;
+    void enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
     void loop(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
-    void exit(BalanceController *controller);
+    void exit(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
 };
 
 class Driving : public BalanceState
@@ -55,16 +53,16 @@ public:
     static Driving *GetInstance();
     void enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
     void loop(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
-    void exit(BalanceController *controller) {};
+    void exit(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) {};
 };
 
 class Position : public BalanceState
 {
 public:
     static Position *GetInstance();
-    void enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) {};
+    void enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
     void loop(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
-    void exit(BalanceController *controller) {};
+    void exit(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) {};
 };
 
 class SelfRight : public BalanceState
@@ -72,25 +70,24 @@ class SelfRight : public BalanceState
 public:
     static SelfRight *GetInstance();
     void enter(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
-    void loop(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) override;
-    void exit(BalanceController *controller) {};
+    void loop(BalanceController *controller, float filterAngle, remoteControlType *remoteControl);
+    void exit(BalanceController *controller, float filterAngle, remoteControlType *remoteControl) {};
 };
 
 class BalanceController
 {
 private:
-    BalanceState *m_currentState;
+    // start off in the disabled state
+    BalanceState *m_currentState = Disabled::GetInstance();
 
 public:
-    float smoothedSteer;
-    float smoothedSpeed;
-    uint32_t lastInputTime;
-    float avgMotSpeedSum;
+    float smoothedSteer = 0;
+    float smoothedSpeed = 0;
+    float avgMotSpeedSum = 0;
+    uint32_t lastInputTime = 0;
 
-    BalanceController();
     void setState(BalanceState *newState, float filterAngle, remoteControlType *remoteControl);
     void loop(float filterAngle, remoteControlType *remoteControl);
 };
-
 
 #endif // FSM_H

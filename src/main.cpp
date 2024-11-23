@@ -158,7 +158,7 @@ float BatteryVoltage()
     else
         filteredBattery = (ALPHA * batteryVoltage) + ((1 - ALPHA) * filteredBattery);
 
-    // Send battery voltage readout periodically to web page, if any clients are connected
+    // return the battery voltage
     return filteredBattery;
 #endif // BATTERY_VOLTAGE
 }
@@ -280,15 +280,9 @@ void setup()
 
 void loop()
 {
-    // track the battery voltage and do nothing if we get below BATTERY_VOLTAGE_SHUTDOWN 
-    static float voltage = BATTERY_VOLTAGE_FULL;
-    if (voltage <= BATTERY_VOLTAGE_SHUTDOWN)
-        return;
-
-    WiFi_loop();
-
 #ifdef FINITE_STATE_MACHINE
     static BalanceController bc;
+#endif
     static unsigned long tLast = 0;
     unsigned long tNow = micros();
     tNowMs = millis();
@@ -296,38 +290,48 @@ void loop()
     // check the battery voltage and if necessary, inform the user
     EVERY_N_MILLISECONDS(500)
     {
-        voltage = BatteryVoltage();
+        static float batteryVoltage = BATTERY_VOLTAGE_FULL;
+        batteryVoltage = BatteryVoltage();
 
         // check to see if we're running via USB instead of the battery
-        if (voltage < BATTERY_VOLTAGE_USB)
-            voltage = BATTERY_VOLTAGE_FULL;
+        if (batteryVoltage < BATTERY_VOLTAGE_USB)
+            batteryVoltage = BATTERY_VOLTAGE_FULL;
 
-        if (voltage < BATTERY_VOLTAGE_LOW)
+        if (batteryVoltage < BATTERY_VOLTAGE_LOW)
         {
             LED_set(LED_BATTERY, CRGB::Yellow);
         }
-        if (voltage <= BATTERY_VOLTAGE_SHUTDOWN)
+        if (batteryVoltage <= BATTERY_VOLTAGE_SHUTDOWN)
         {
-            DB_PRINTF("Battery voltage is critically low (%.1f). Entering deep sleep mode...\n", voltage);
+            DB_PRINTF("Battery voltage is critically low (%.1f). Entering deep sleep mode...\n", batteryVoltage);
             LED_set(LED_BATTERY, CRGB::Red);
-            LED_loop();
+
+            // shut off the motors
+#ifdef FINITE_STATE_MACHINE
             bc.setState(Disabled::GetInstance(), 0, NULL);
+#else
+            digitalWrite(motEnablePin, HIGH); // disable driver in hardware
+            LED_set(LED_ENABLED, CRGB::Red);
+            motLeft.speed = 0;
+            motRight.speed = 0;
+#endif // FINITE_STATE_MACHINE
+            LED_loop();
             esp_deep_sleep_start(); // Enter deep sleep mode
             return;
         }
     }
 
+#ifdef FINITE_STATE_MACHINE
     // run the balancing logic
     bc.loop(filterAngle, &remoteControl);
 
-    // update the web page
+    // update the web page at the same rate we read the gyro so our plot.prescaler logic still works
     if (tNow - tLast > dT_MICROSECONDS)
     {
         tLast = tNow;
         WebServer_loop();
     }
 #else
-    static unsigned long tLast = 0;
     float avgMotSpeed;
     static float smoothedSteer = 0;
     static float smoothedSpeed = 0;
@@ -340,9 +344,6 @@ void loop()
     static boolean selfRight = false;
     static boolean disableControl = false;
     static float angleErrorIntegral = 0;
-
-    unsigned long tNow = micros();
-    tNowMs = millis();
 
 #ifdef TMC2209
     // Debugging code to try and figure out why I can't use the TMC2209 code path.
@@ -557,9 +558,7 @@ void loop()
     }
 #endif // FINITE_STATE_MACHINE
 
-    // show any updated LEDs
-    LED_loop();
-
+    WiFi_loop();
     parseSerial();
 
     // Handle PS3 controller
@@ -571,6 +570,9 @@ void loop()
 #ifdef INPUT_XBOX
     Xbox_loop();
 #endif
+
+    // show any updated LEDs
+    LED_loop();
 }
 
 void parseSerial()
