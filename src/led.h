@@ -9,7 +9,9 @@ typedef enum
     LED_ENABLED,
     LED_CONTROLLER_CONNECTED,
     LED_EYES,
+    LED_NOSE,
     LED_EARS,
+    LED_WHEELS,
     LED_BELLY,
     NUM_LEDS        // number of LEDs
 } LedLights;

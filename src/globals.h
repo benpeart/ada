@@ -1,26 +1,22 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-
 // #define WIFI_CONNECTION
 // #define WEBSERVER
 // #define SERIALINPUT
-#define BATTERY_VOLTAGE
 // #define MDNS // include MDNS support
 // #define SPIFFSEDITOR // include the SPPIFFS editor
-// #define TMC2209 // TMC2209 stepper controller library (!!!FIX THIS!!! currently broken with V2 hardware)
+// #define TMC2209 // TMC2209 stepper controller library (currently broken with V2 hardware, requires powering the TMC2209 logic pin with 3.3V)
 // #define DYNAMIC_MICROSTEPPING
 // #define DEBUG_SPINNERS
 // #define INPUT_PS3  // PS3 controller via bluetooth. Dependencies take up quite some program space!
 #define INPUT_XBOX // Xbox controller via bluetooth. Dependencies take up quite some program space!
-#define FINITE_STATE_MACHINE
 #define LED_LIGHTS
+#define BATTERY_VOLTAGE
+#define FALL_DETECTION
 
 #include <Arduino.h>
 #include <Preferences.h>
-#include <fastStepper.h>
-#include "PID.h"
-#include "webserver.h"
 
 // ESP32 Pin Assignments
 
@@ -51,30 +47,6 @@
 
 extern Preferences preferences;
 
-extern fastStepper motLeft;
-extern fastStepper motRight;
-
-void parseCommand(char *data, uint8_t length);
-
-extern float filterAngle;
-extern float gyroFilterConstant;
-extern float gyroGain;
-
-// these are all needed so we can plot them in the WebUI
-extern uint32_t tNowMs;
-extern plotType plot;
-extern float maxStepSpeed;
-
-extern PID pidAngle;
-extern PID pidPos;
-extern PID pidSpeed;
-extern float accAngle;
-extern float pidAngleOutput;
-extern float pidPosOutput;
-extern float pidSpeedOutput;
-extern float speedAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
-extern float steerAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
-
 /*  Remote control structure
     Every remote should give a speed and steer command from -100 ... 100
     To adjust "driving experience", e.g. a slow beginners mode, or a fast expert mode, a gain can be adjusted for the speed and steer inputs.
@@ -95,4 +67,5 @@ typedef struct
     bool disableControl = false;
 } remoteControlType;
 extern remoteControlType remoteControl;
+
 #endif // GLOBALS_H

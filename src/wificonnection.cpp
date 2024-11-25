@@ -99,9 +99,7 @@ void WiFi_setup()
     {
         DB_PRINTLN("Could not start MDNS responder");
     }
-#endif // MDNS
 
-#ifdef MDNS
     MDNS.addService("http", "tcp", 80);
     MDNS.addService("ws", "tcp", 81);
 #endif // MDNS

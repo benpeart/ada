@@ -16,7 +16,7 @@ float angleOffset = 2.0;
 float gyroFilterConstant = 0.996;
 float gyroGain = 1.0;
 
-void Gyro_ReadSensor()
+float Gyro_ReadSensor(float dT)
 {
     int16_t ax, ay, az, gx, gy, gz;
     float deltaGyroAngle;
@@ -34,9 +34,10 @@ void Gyro_ReadSensor()
     filterAngle = gyroFilterConstant * (filterAngle + deltaGyroAngle) + (1 - gyroFilterConstant) * (accAngle);
 
     // Serial << ay/1000.0 << "\t" << az/1000.0 << "\t" << accAngle << "\t" << filterAngle << endl;
+    return filterAngle;
 }
 
-void Gyro_setup()
+void Gyro_setup(float dT)
 {
     // Gyro setup (utilize maximum I2C bus speed supported by the MPU6050 - 400kHz)
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000UL);
@@ -63,7 +64,7 @@ void Gyro_setup()
     gyroFilterConstant = 0.8;
     for (uint8_t i = 0; i < 50; i++)
     {
-        Gyro_ReadSensor();
+        Gyro_ReadSensor(dT);
     }
     gyroFilterConstant = gyroFilterConstantBackup;
 }

@@ -1,11 +1,11 @@
 #ifndef GYRO_H
 #define GYRO_H
 
-extern float dT;
+extern float filterAngle;
 extern float angleOffset;
 
-void Gyro_setup();
+void Gyro_setup(float dT);
 void Gyro_CalculateOffset(int nSample);
-void Gyro_ReadSensor();
+float Gyro_ReadSensor(float dT);
 
 #endif // GYRO_H

@@ -27,8 +27,7 @@ typedef struct
   uint8_t prescaler = 4;
 } plotType;
 
-void sendWifiList(void);
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
+void parseSerial();
 
 void WebServer_setup();
 void WebServer_loop();

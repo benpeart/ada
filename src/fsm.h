@@ -1,7 +1,8 @@
 #ifndef FSM_H
 #define FSM_H
 
-#include "globals.h"
+#include <fastStepper.h>
+#include "PID.h"
 
 //
 // Implement a Finite State Machine to track balancing state changes. The following
@@ -87,7 +88,33 @@ public:
     uint32_t lastInputTime = 0;
 
     void setState(BalanceState *newState, float filterAngle, remoteControlType *remoteControl);
-    void loop(float filterAngle, remoteControlType *remoteControl);
+    void loop();
 };
+
+extern BalanceController bc;
+void BalanceController_setup();
+
+// these are all needed so we can plot them in the WebUI
+#define dT_MICROSECONDS 5000
+extern float dT;
+extern float gyroFilterConstant;
+extern float gyroGain;
+
+extern uint32_t tNowMs;
+extern float maxStepSpeed;
+
+extern PID pidAngle;
+extern PID pidPos;
+extern PID pidSpeed;
+extern float accAngle;
+extern float pidAngleOutput;
+extern float pidPosOutput;
+extern float pidSpeedOutput;
+extern float speedAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+extern float steerAlphaConstant; // how fast it reacts to inputs, higher = softer (between 0 and 1, but not 0 or 1)
+
+extern fastStepper motLeft;
+extern fastStepper motRight;
+void setMicroStep(uint8_t uStep);
 
 #endif // FSM_H
