@@ -5,8 +5,9 @@
 #include "debug.h"
 #include <XboxSeriesXControllerESP32_asukiaaa.hpp>
 #include "led.h"
+#include <math.h>
 
-#define STEERING_DEADZONE_RADIUS 6
+#define STEERING_DEADZONE_RADIUS 0.06
 
 // bind to any xbox controller
 XboxSeriesXControllerESP32_asukiaaa::Core xboxController;
@@ -104,12 +105,26 @@ void Xbox_loop()
             // subtract the requested reverse speed from the requested forward speed in case both triggers are requesting different values
             remoteControl.speed = -(car_speed_forward - car_speed_reverse);
 
-            // convert the range from 0 <-> maxJoy to -100 <-> 100 then scale
-            remoteControl.steer = (float)(xboxController.xboxNotif.joyLHori - (XboxControllerNotificationParser::maxJoy / 2)) / (XboxControllerNotificationParser::maxJoy / 2) * 100 * remoteControl.steerGain;
+            // convert the range from 0 <-> maxJoy to -1.0 <-> 1.0
+            remoteControl.steer = (float)(xboxController.xboxNotif.joyLHori - (XboxControllerNotificationParser::maxJoy / 2)) / (XboxControllerNotificationParser::maxJoy / 2);
 
             // if within the dead zone, zero it out
             if (remoteControl.steer > -STEERING_DEADZONE_RADIUS && remoteControl.steer < STEERING_DEADZONE_RADIUS)
                 remoteControl.steer = 0;
+
+            // use a response curve to dampen the steering response around center and ramp it up the further you go
+            float exponent = 2.0;
+            if (remoteControl.steer >= 0)
+                remoteControl.steer = pow(remoteControl.steer, exponent);
+            else
+                remoteControl.steer = -pow(-remoteControl.steer, exponent);
+            DB_PRINTF("response curve = %f\n", remoteControl.steer);
+
+            // scale the result according to the d-pad input
+            remoteControl.steer = remoteControl.steer * remoteControl.steerGain;
+
+            // now scale it from -1.0 to 1.0 to -100 to 100
+            remoteControl.steer *= 100;
 
             // handle other Xbox inputs
             onXboxNotify();
