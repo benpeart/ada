@@ -6,7 +6,8 @@
 #include <XboxSeriesXControllerESP32_asukiaaa.hpp>
 #include "led.h"
 
-#define STEERING_DEADZONE_RADIUS 6
+#define SPEED_DEADZONE_RADIUS 0.05
+#define STEERING_DEADZONE_RADIUS 0.075
 
 // bind to any xbox controller
 XboxSeriesXControllerESP32_asukiaaa::Core xboxController;
@@ -41,16 +42,16 @@ void onXboxNotify()
         remoteControl.disableControl = true;
     if (xboxController.xboxNotif.btnRB)
     {
-        if (remoteControl.speedOffset < 20.0)
+        if (remoteControl.speedOffset < 0.20)
         {
-            remoteControl.speedOffset += 0.5;
+            remoteControl.speedOffset += 0.005;
         }
     }
     if (xboxController.xboxNotif.btnLB)
     {
-        if (remoteControl.speedOffset > -20.0)
+        if (remoteControl.speedOffset > -0.20)
         {
-            remoteControl.speedOffset -= 0.5;
+            remoteControl.speedOffset -= 0.005;
         }
     }
 }
@@ -97,19 +98,38 @@ void Xbox_loop()
                 onXboxConnect();
             }
 
-            // normalize the controller input to the range of -100 to 100 then apply gain
-            float car_speed_forward = ((float)xboxController.xboxNotif.trigRT / XboxControllerNotificationParser::maxTrig) * 100 * remoteControl.speedGain + remoteControl.speedOffset;
-            float car_speed_reverse = ((float)xboxController.xboxNotif.trigLT / XboxControllerNotificationParser::maxTrig) * 100 * remoteControl.speedGain + remoteControl.speedOffset;
+            // normalize the controller input to the range of 0.0 to 1.0
+            float car_speed_forward = ((float)xboxController.xboxNotif.trigRT / XboxControllerNotificationParser::maxTrig);
+            float car_speed_reverse = ((float)xboxController.xboxNotif.trigLT / XboxControllerNotificationParser::maxTrig);
 
             // subtract the requested reverse speed from the requested forward speed in case both triggers are requesting different values
             remoteControl.speed = -(car_speed_forward - car_speed_reverse);
 
-            // convert the range from 0 <-> maxJoy to -100 <-> 100 then scale
-            remoteControl.steer = (float)(xboxController.xboxNotif.joyLHori - (XboxControllerNotificationParser::maxJoy / 2)) / (XboxControllerNotificationParser::maxJoy / 2) * 100 * remoteControl.steerGain;
+            // if within the dead zone, zero it out
+            if (remoteControl.speed > -SPEED_DEADZONE_RADIUS && remoteControl.speed < SPEED_DEADZONE_RADIUS)
+                remoteControl.speed = 0;
+
+            // normalize the controller input to the range of -1.0 to 1.0
+            remoteControl.steer = (float)(xboxController.xboxNotif.joyLHori - (XboxControllerNotificationParser::maxJoy / 2)) / (XboxControllerNotificationParser::maxJoy / 2);
 
             // if within the dead zone, zero it out
             if (remoteControl.steer > -STEERING_DEADZONE_RADIUS && remoteControl.steer < STEERING_DEADZONE_RADIUS)
                 remoteControl.steer = 0;
+
+            // use a power of 2 (squared) response curve to dampen the response around center and ramp it up the further you go
+            if (remoteControl.steer < 0)
+                remoteControl.steer = -(remoteControl.steer * remoteControl.steer);
+            else
+                remoteControl.steer = remoteControl.steer * remoteControl.steer;
+            DB_PRINTF("remoteControl.steer = %f\r", remoteControl.steer);
+
+            // adjust the gain and scale the result according to the d-pad input
+            remoteControl.speed = remoteControl.speed * remoteControl.speedGain + remoteControl.speedOffset;
+            remoteControl.steer = remoteControl.steer * remoteControl.steerGain;
+
+            // now scale the output from -1.0 to 1.0 to -100 to 100
+            remoteControl.speed *= 100;
+            remoteControl.steer *= 100;
 
             // handle other Xbox inputs
             onXboxNotify();
