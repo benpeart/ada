@@ -454,6 +454,7 @@ void BalanceController::loop()
 {
     static unsigned long tLast = 0;
     unsigned long tNow = micros();
+    tNowMs = millis();
 
     if (tNow - tLast > dT_MICROSECONDS)
     {

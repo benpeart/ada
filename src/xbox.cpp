@@ -7,7 +7,7 @@
 #include "led.h"
 
 #define SPEED_DEADZONE_RADIUS 0.05
-#define STEERING_DEADZONE_RADIUS 0.075
+#define STEERING_DEADZONE_RADIUS 0.08
 
 // bind to any xbox controller
 XboxSeriesXControllerESP32_asukiaaa::Core xboxController;
